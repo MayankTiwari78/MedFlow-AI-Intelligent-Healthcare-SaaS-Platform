@@ -1,91 +1,104 @@
-# Prescripto - Hospital Management System
+# 🏥 MedFlow AI
 
-## Description
-**Prescripto** is a comprehensive Hospital Management System built on the MERN stack to enhance hospital operations. This system includes features such as secure user authentication, efficient appointment scheduling, patient record management, and real-time communication between doctors and patients. It provides a scalable and user-friendly platform to streamline healthcare workflows and improve the hospital experience.
+## Enterprise AI-Powered Healthcare SaaS Platform
 
-## Features
-- **User Authentication**: Secure login for patients, doctors, and administrators.
-- **Appointment Scheduling**: Easy booking, rescheduling, and cancellation of appointments.
-- **Patient Records Management**: Store, access, and update patient health records.
-- **Doctor-Patient Communication**: Real-time messaging for consultations and follow-ups.
-- **Admin Dashboard**: Manage users, appointments, and view analytics.
-- **Secure Data Storage**: Ensure patient privacy and data security with MongoDB.
+MedFlow AI is a next-generation Healthcare SaaS Platform designed for hospitals, clinics, doctors, and patients. The platform combines modern healthcare management with Artificial Intelligence to automate appointments, patient management, diagnostics, analytics, and healthcare workflows.
 
-## Tech Stack
-- **Frontend**: React.js
-- **Backend**: Node.js and Express.js
-- **Database**: MongoDB
-- **Authentication**: JWT (JSON Web Tokens)
-- **State Management**: Redux (optional)
+---
 
-## Getting Started
-Follow these instructions to set up the project locally.
+## 🚀 Features
 
-### Prerequisites
-- Node.js installed
-- MongoDB installed or access to a MongoDB cloud instance
-- Git installed
+### 👤 Authentication
+- Secure Login & Registration
+- JWT Authentication
+- Refresh Tokens
+- Role Based Access Control (RBAC)
+- Email Verification
+- Forgot Password
+- OTP Verification
+- Two Factor Authentication (Coming Soon)
 
-### Installation
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/your-username/Prescripto-Hospital_Management_System.git
-   cd Prescripto-Hospital_Management_System
+### 🏥 Hospital Management
+- Doctor Management
+- Patient Management
+- Appointment Booking
+- Department Management
+- Hospital Dashboard
+- Multi-role Admin Panel
 
-## Install dependencies
+### 🤖 AI Features (Upcoming)
+- AI Symptom Checker
+- AI Medical Assistant
+- AI Prescription Generator
+- AI Medical Report Analysis
+- AI Chat Assistant
+- AI Health Risk Prediction
 
-1. **Install admin dependencies**
-   ```bash
-   cd admin
-   npm install
-   ```
+### 📊 Analytics
+- Dashboard Analytics
+- Appointment Analytics
+- Revenue Analytics
+- Doctor Performance
+- Patient Statistics
 
-2. **Install frontend dependencies**
-   ```bash
-   cd frontend
-   npm install
-   ```
+---
 
-3. **Set up environment variables**
-   In the server directory, create a .env file with the following:
+## 🛠️ Tech Stack
 
-   MONGODB_URI=your_mongodb_connection_string
-   JWT_SECRET=your_jwt_secret
-   Run the application
+### Frontend
+- React
+- Vite
+- Tailwind CSS
 
-4. **Start server:**
-   ```bash
-   cd backend
-   npm run server
-   ```
+### Backend
+- Node.js
+- Express.js
 
-5. **Start Admin Panel:**
-   ```bash
-   cd admin
-   npm run dev
-   ```
+### Database
+- MongoDB
 
-6. **Start Frontend Panel:**
-   ```bash
-   cd frontend
-   npm run dev
-   ```
+### Authentication
+- JWT
 
-# Topics
-Hospital Management, MERN Stack, MongoDB, Express.js, React, Node.js, Healthcare App, Patient Records, Appointments.
+### Cloud
+- Cloudinary
 
-# Contributors
-Niraj Kumar [Github](https://github.com/meniraj07)
+---
 
-# Deployment Links
-[Prescripto Backend](https://prescriptobackend-4ylq.onrender.com)
+## 📁 Project Structure
 
-[Prescripto Patient Panel](https://prescripto-hospital-management-system.vercel.app/)
+```
+admin/
+backend/
+frontend/
+```
 
-[Prescripto Admin/Doctor Panel](https://prescripto-hospital-management-system-c29o.vercel.app/)
+---
 
-# Contact
-For any questions or feedback, please contact [Niraj Kumar](https://www.linkedin.com/in/nirajkumar-nk/)
+## 📌 Roadmap
 
-# License
-This project is licensed under the MIT License.
+- Enterprise Authentication
+- Refresh Tokens
+- RBAC
+- AI Healthcare Assistant
+- Docker Support
+- API Documentation
+- Notifications
+- Video Consultation
+- Medical Reports
+- Enterprise Dashboard
+
+---
+
+## 👨‍💻 Developer
+
+**Mayank Tiwari**
+
+GitHub:
+https://github.com/MayankTiwari78
+
+---
+
+## ⭐ MedFlow AI
+
+Building the Future of Intelligent Healthcare.
