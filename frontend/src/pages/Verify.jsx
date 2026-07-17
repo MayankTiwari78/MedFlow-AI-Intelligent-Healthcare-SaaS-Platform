@@ -10,6 +10,7 @@ const Verify = () => {
 
     const success = searchParams.get("success")
     const appointmentId = searchParams.get("appointmentId")
+    const sessionId = searchParams.get("session_id")
 
     const { backendUrl, token } = useContext(AppContext)
 
@@ -20,7 +21,7 @@ const Verify = () => {
 
         try {
 
-            const { data } = await axios.post(backendUrl + "/api/user/verifyStripe", { success, appointmentId }, { headers: { token } })
+            const { data } = await axios.post(backendUrl + "/api/user/verifyStripe", { success, appointmentId, sessionId }, { headers: { token } })
 
             if (data.success) {
                 toast.success(data.message)

@@ -1,104 +1,152 @@
-# 🏥 MedFlow AI
+# MedFlow AI
 
-## Enterprise AI-Powered Healthcare SaaS Platform
+MedFlow AI is a healthcare SaaS platform with separate patient, doctor, and admin web clients backed by an Express API.
 
-MedFlow AI is a next-generation Healthcare SaaS Platform designed for hospitals, clinics, doctors, and patients. The platform combines modern healthcare management with Artificial Intelligence to automate appointments, patient management, diagnostics, analytics, and healthcare workflows.
+## Phase 1A Status
 
----
+Phase 1A establishes the enterprise backend foundation:
 
-## 🚀 Features
+- TypeScript backend source under `backend/src`
+- Strict TypeScript checking and production compilation
+- Centralized, validated environment configuration
+- Typed Mongoose models preserving existing MongoDB field names
+- Helmet, CORS allowlist, rate limiting, body limits, secure image upload validation
+- JWT expiry with `Authorization: Bearer <token>` support
+- Compatibility with legacy `token`, `aToken`, and `dToken` headers
+- Central async error handling, application errors, 404 handling, health/readiness endpoints
+- Zod validation for authentication, profiles, doctors, appointments, and payments
+- Ownership checks for patient appointments, doctor appointments, and payment initialization
+- Test suite that avoids real MongoDB, Cloudinary, Razorpay, and Stripe connections
 
-### 👤 Authentication
-- Secure Login & Registration
-- JWT Authentication
-- Refresh Tokens
-- Role Based Access Control (RBAC)
-- Email Verification
-- Forgot Password
-- OTP Verification
-- Two Factor Authentication (Coming Soon)
+## Project Structure
 
-### 🏥 Hospital Management
-- Doctor Management
-- Patient Management
-- Appointment Booking
-- Department Management
-- Hospital Dashboard
-- Multi-role Admin Panel
-
-### 🤖 AI Features (Upcoming)
-- AI Symptom Checker
-- AI Medical Assistant
-- AI Prescription Generator
-- AI Medical Report Analysis
-- AI Chat Assistant
-- AI Health Risk Prediction
-
-### 📊 Analytics
-- Dashboard Analytics
-- Appointment Analytics
-- Revenue Analytics
-- Doctor Performance
-- Patient Statistics
-
----
-
-## 🛠️ Tech Stack
-
-### Frontend
-- React
-- Vite
-- Tailwind CSS
-
-### Backend
-- Node.js
-- Express.js
-
-### Database
-- MongoDB
-
-### Authentication
-- JWT
-
-### Cloud
-- Cloudinary
-
----
-
-## 📁 Project Structure
-
-```
-admin/
-backend/
-frontend/
+```text
+admin/      React/Vite admin and doctor panel
+backend/    TypeScript Express API
+frontend/   React/Vite patient app
 ```
 
----
+Backend structure:
 
-## 📌 Roadmap
+```text
+backend/src/
+  config/       environment, MongoDB, Cloudinary, payment clients
+  controllers/  HTTP controllers
+  middleware/   auth, validation, errors, uploads, security
+  models/       typed Mongoose models
+  routes/       API route definitions
+  services/     business logic
+  types/        shared TypeScript types
+  validators/   Zod request schemas
+  app.ts        Express app
+  server.ts     runtime entrypoint
+backend/tests/  Vitest/Supertest coverage
+```
 
-- Enterprise Authentication
-- Refresh Tokens
-- RBAC
-- AI Healthcare Assistant
-- Docker Support
-- API Documentation
-- Notifications
-- Video Consultation
-- Medical Reports
-- Enterprise Dashboard
+## Backend Setup
 
----
+```bash
+cd backend
+npm install
+cp .env.example .env
+npm run dev
+```
 
-## 👨‍💻 Developer
+Fill `backend/.env` with real local credentials. Do not commit `.env`.
 
-**Mayank Tiwari**
+Required backend environment variables:
 
-GitHub:
-https://github.com/MayankTiwari78
+- `NODE_ENV`
+- `PORT`
+- `MONGODB_URI`
+- `JWT_SECRET`
+- `CLIENT_URL`
+- `ADMIN_URL`
+- `ADMIN_EMAIL`
+- `ADMIN_PASSWORD`
+- `CLOUDINARY_NAME`
+- `CLOUDINARY_API_KEY`
+- `CLOUDINARY_SECRET_KEY`
+- `RAZORPAY_KEY_ID`
+- `RAZORPAY_KEY_SECRET`
+- `STRIPE_SECRET_KEY`
+- `CURRENCY`
 
----
+## Backend Commands
 
-## ⭐ MedFlow AI
+```bash
+npm run dev        # tsx development server
+npm run build      # clean and compile to dist/
+npm run start      # run compiled JavaScript
+npm run typecheck  # strict TypeScript check
+npm run lint       # ESLint
+npm run format     # Prettier
+npm run test       # Vitest/Supertest
+```
 
-Building the Future of Intelligent Healthcare.
+## API Overview
+
+Existing public API paths are preserved:
+
+- `POST /api/user/register`
+- `POST /api/user/login`
+- `GET /api/user/get-profile`
+- `POST /api/user/update-profile`
+- `POST /api/user/book-appointment`
+- `GET /api/user/appointments`
+- `POST /api/user/cancel-appointment`
+- `POST /api/user/payment-razorpay`
+- `POST /api/user/verifyRazorpay`
+- `POST /api/user/payment-stripe`
+- `POST /api/user/verifyStripe`
+- `POST /api/admin/login`
+- `POST /api/admin/add-doctor`
+- `GET /api/admin/appointments`
+- `POST /api/admin/cancel-appointment`
+- `GET /api/admin/all-doctors`
+- `POST /api/admin/change-availability`
+- `GET /api/admin/dashboard`
+- `POST /api/doctor/login`
+- `GET /api/doctor/list`
+- `GET /api/doctor/appointments`
+- `POST /api/doctor/cancel-appointment`
+- `POST /api/doctor/complete-appointment`
+- `POST /api/doctor/change-availability`
+- `GET /api/doctor/dashboard`
+- `GET /api/doctor/profile`
+- `POST /api/doctor/update-profile`
+
+Health checks:
+
+- `GET /health`
+- `GET /ready`
+- `GET /api/health`
+- `GET /api/ready`
+
+## Compatibility Notes
+
+The backend returns the new `success`, `message`, and `data` response shape while also preserving legacy top-level fields used by the current React clients, such as `token`, `doctors`, `appointments`, `userData`, `profileData`, `dashData`, `order`, and `session_url`.
+
+Stripe verification now requires the backend-created Checkout Session id. The frontend verify page sends `session_id` back to `/api/user/verifyStripe`; the backend no longer marks payments as successful based only on a frontend `success=true` value.
+
+## Upcoming Phases
+
+These are intentionally not implemented in Phase 1A:
+
+- Refresh tokens
+- Email verification
+- Forgot/reset password
+- OTP
+- Two-factor authentication
+- Enterprise RBAC
+- Session management
+- Next.js migration
+- AI features
+- Docker
+- Swagger
+
+## Developer
+
+Mayank Tiwari
+
+GitHub: https://github.com/MayankTiwari78
