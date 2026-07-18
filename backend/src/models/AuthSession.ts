@@ -15,6 +15,8 @@ export interface AuthSession {
   expiresAt: Date;
   revokedAt?: Date;
   revocationReason?: string;
+  displayName?: string;
+  organizationId?: string;
   ipAddress?: string;
   userAgent?: string;
   device?: string;
@@ -34,6 +36,8 @@ const authSessionSchema = new mongoose.Schema<AuthSession>(
     expiresAt: { type: Date, required: true },
     revokedAt: { type: Date, index: true },
     revocationReason: { type: String },
+    displayName: { type: String, trim: true, maxlength: 120 },
+    organizationId: { type: String, index: true },
     ipAddress: { type: String },
     userAgent: { type: String },
     device: { type: String }

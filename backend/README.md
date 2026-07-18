@@ -31,6 +31,22 @@ Phase 1B authentication is split by responsibility:
 - `services/tokenService.ts`: access/refresh JWT signing and verification
 - `models/AuthSession.ts` and `models/AuthChallenge.ts`: persistence foundation for refresh tokens and challenges
 
+Phase 1C authorization and security adds:
+
+- `constants/rbac.ts`: enterprise roles, permissions, and role-permission matrix
+- `models/Organization.ts` and `models/OrganizationMembership.ts`: organization foundation and membership lifecycle
+- `models/AuthSecurity.ts`: encrypted TOTP secret state and hashed recovery-code records
+- `models/AuditLog.ts`: append-oriented security audit events
+- `services/organizationService.ts`: authorization context, default organization, membership management, and role safety checks
+- `services/twoFactorService.ts`: `otplib` TOTP setup, `qrcode` setup QR data, login challenges, recovery-code lifecycle, and 2FA session revocation
+- `services/auditService.ts`: safe audit metadata redaction and tenant-scoped audit queries
+
+Phase 1D platform operations adds:
+
+- `utils/logger.ts`: Pino structured logging with recursive sensitive-value redaction
+- `middleware/requestLogging.ts`: generated/propagated `x-request-id` and HTTP request logging
+- `openapi/document.ts` and `openapi/routes.ts`: OpenAPI 3.0 JSON and controlled Swagger UI
+
 ## Environment
 
 Copy `.env.example` to `.env` and provide local values. The database name must be part of `MONGODB_URI`; the backend no longer appends `/prescripto`.
@@ -47,6 +63,11 @@ Phase 1B auth variables:
 - `AUTH_LOCK_MAX_ATTEMPTS`, `AUTH_LOCK_DURATION`: temporary lockout after repeated failed login.
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM`: production SMTP delivery.
 - `CLIENT_URL`, `ADMIN_URL`: CORS allowlist and auth-origin checks.
+- `TWO_FACTOR_ENCRYPTION_KEY`: strong dedicated 32+ byte secret for AES-256-GCM TOTP secret encryption. Production requires it.
+- `TOTP_ISSUER`, `TOTP_SETUP_EXPIRES_IN`, `TWO_FACTOR_CHALLENGE_EXPIRES_IN`, `TWO_FACTOR_MAX_ATTEMPTS`, `RECOVERY_CODE_COUNT`: authenticator-app 2FA, challenge, and recovery-code settings.
+- `DEFAULT_ORGANIZATION_NAME`, `DEFAULT_ORGANIZATION_SLUG`: default organization used by the safe migration/backfill foundation.
+- `LOG_LEVEL`, `SERVICE_NAME`: structured logger configuration.
+- `ENABLE_API_DOCS`: enables `/api-docs` outside development. `/api-docs.json` remains available for trusted tooling.
 
 `JWT_SECRET` remains as a transitional legacy-token secret and fallback in non-production. New production deployments should use distinct access and refresh secrets.
 
@@ -86,6 +107,15 @@ npm run start
 - Legacy `token`, `aToken`, and `dToken` support retained for current clients
 - Sensitive fields removed from API responses
 - Duplicate email errors returned as safe conflict responses
+- Centralized enterprise roles and permissions
+- Tenant membership validation before protected organization access
+- Authenticator-app TOTP through maintained `otplib` with encrypted secrets
+- QR setup PNG data URLs through maintained `qrcode`
+- Single-use recovery codes stored only as HMAC hashes
+- Short-lived purpose-bound 2FA challenge JWTs that cannot authorize protected APIs
+- Session-management APIs returning only safe session metadata
+- Structured audit logs with secret metadata redaction
+- Tenant-scoped audit reads requiring `audit:read`
 
 ## Authentication Flows
 
@@ -125,7 +155,37 @@ Email verification, recovery, and OTP:
 - Verification and reset tokens are cryptographically random; only HMAC hashes are stored.
 - Forgot-password returns the same generic response whether or not an account exists.
 - Reset rejects expired, used, invalid, weak, or reused-password challenges.
-- OTP challenges support `EMAIL_VERIFICATION`, `PASSWORD_RESET`, and `LOGIN_VERIFICATION`; TOTP/2FA is intentionally not implemented in Phase 1B.
+- OTP challenges support `EMAIL_VERIFICATION`, `PASSWORD_RESET`, and `LOGIN_VERIFICATION`.
+
+## Phase 1C Authorization, 2FA, And Sessions
+
+Roles are centralized as `SUPER_ADMIN`, `HOSPITAL_ADMIN`, `DOCTOR`, `STAFF`, and `PATIENT`. Public registration creates only `PATIENT`. The configured admin compatibility account maps to `HOSPITAL_ADMIN`; no public or automatic backfill path grants `SUPER_ADMIN`.
+
+Permissions include `users:*`, `doctors:*`, `appointments:*`, `reports:read`, `billing:*`, `sessions:*`, `audit:read`, `roles:*`, `organization:*`, and `settings:manage`. A valid login authenticates identity only; route authorization still requires server-resolved role, permission, organization, and ownership checks.
+
+Tenant rules:
+
+- Organization identity comes from authenticated membership resolved server-side.
+- Request body/header `organizationId` values are not trusted for protected actions.
+- Patients remain limited to owned resources.
+- Doctors remain limited to their own appointments/profile plus organization scope.
+- Hospital admins are limited to their organization.
+- `SUPER_ADMIN` is reserved for explicitly bootstrapped future administrative operations.
+- Existing unscoped records are supported only through documented default-organization migration fallback and do not bypass ownership checks.
+
+2FA setup generates an authenticator-app TOTP secret with maintained `otplib`, returns standards-compliant `otpauth://` setup data plus PNG QR data from maintained `qrcode`, stores only AES-256-GCM encrypted pending/confirmed state, expires setup challenges, limits attempts, and enables 2FA only after a valid TOTP confirmation. Recovery codes are displayed once, stored only as hashes, and consumed one time.
+
+2FA login verifies primary credentials first, returns only a short-lived restricted `two_factor_challenge` token for enabled accounts, and creates normal access/refresh tokens only after valid TOTP or unused recovery-code verification.
+
+Session APIs:
+
+- `GET /api/v1/auth/sessions`
+- `PATCH /api/v1/auth/sessions/:sessionId`
+- `DELETE /api/v1/auth/sessions/:sessionId`
+- `POST /api/v1/auth/sessions/revoke-others`
+- `POST /api/v1/auth/sessions/revoke-all`
+
+Returned session fields are limited to session ID, display/device metadata, approximate IP, timestamps, expiration, and current-session indicator. Refresh tokens, hashes, cookies, and fingerprints are never returned.
 
 ## Migration and Backfill
 
@@ -147,6 +207,15 @@ The script:
 
 Review duplicate reports before adding any future unique normalized-email indexes.
 
+Phase 1C backfill:
+
+```bash
+cd backend
+npx tsx src/scripts/backfillPhase1C.ts
+```
+
+This script creates/reuses the default organization, maps existing users to `PATIENT`, doctors to `DOCTOR`, configured admin compatibility to `HOSPITAL_ADMIN`, creates missing memberships, associates missing organization IDs, initializes disabled 2FA security records, and reports duplicate active membership conflicts. It does not create `SUPER_ADMIN`, delete records, contact external services, or run automatically during startup.
+
 ## Payment Notes
 
 Razorpay verification validates the server-side signature and checks appointment ownership.
@@ -167,6 +236,12 @@ Covered areas include:
 - Access-token validation, wrong token type, and password-change invalidation
 - Refresh rotation, old-token invalidation, reuse detection, logout, and logout-all
 - Email verification, used-token rejection, password recovery, session revocation, and OTP purpose binding
+- RBAC denial for patient/admin/audit access
+- Hospital-admin super-admin operation denial and self-role escalation prevention
+- Cross-organization appointment denial despite forged organization input
+- Maintained TOTP behavior, setup expiry, PNG QR output, invalid setup confirmation, valid setup confirmation, encrypted secret persistence, hashed recovery-code persistence, 2FA login challenge, invalid TOTP, valid TOTP, challenge replay denial, recovery-code success, and recovery-code reuse denial
+- Session listing, current-session identification, revoke-other-sessions, selected-session revocation, and revoked refresh-token rejection
+- Tenant-scoped audit access and secret non-persistence checks
 - Missing and invalid auth tokens
 - Protected route access
 - Invalid ObjectId handling
@@ -174,3 +249,7 @@ Covered areas include:
 - Payment ownership
 - 404 responses
 - Global error responses
+
+## Container Runtime
+
+`backend/Dockerfile` builds the TypeScript API in a multi-stage Node 22 Alpine image and runs compiled output only. Use the root [deployment guide](../docs/deployment.md) for the local Compose workflow. Production deployments must provide actual validated environment values, approved origins, external TLS, a managed database, and secret management; no production infrastructure is implied by the local Compose file.

@@ -14,8 +14,12 @@ export interface Appointment {
   cancelled: boolean;
   payment: boolean;
   isCompleted: boolean;
+  status: "scheduled" | "completed" | "cancelled";
+  clinicalNotes?: string;
+  clinicalNotesUpdatedAt?: Date;
   stripeSessionId?: string;
   razorpayOrderId?: string;
+  organizationId?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -35,15 +39,30 @@ const appointmentSchema = new mongoose.Schema<Appointment>(
     cancelled: { type: Boolean, default: false },
     payment: { type: Boolean, default: false },
     isCompleted: { type: Boolean, default: false },
+    status: {
+      type: String,
+      enum: ["scheduled", "completed", "cancelled"],
+      default: "scheduled",
+      index: true
+    },
+    clinicalNotes: { type: String, default: "", select: false },
+    clinicalNotesUpdatedAt: { type: Date },
     stripeSessionId: { type: String },
-    razorpayOrderId: { type: String }
+    razorpayOrderId: { type: String },
+    organizationId: { type: String, index: true }
   },
   { timestamps: true }
 );
 
 appointmentSchema.index({ userId: 1 });
 appointmentSchema.index({ docId: 1 });
+appointmentSchema.index({ organizationId: 1, userId: 1 });
+appointmentSchema.index({ organizationId: 1, docId: 1 });
 appointmentSchema.index({ slotDate: 1, cancelled: 1, isCompleted: 1 });
+appointmentSchema.index(
+  { docId: 1, slotDate: 1, slotTime: 1 },
+  { unique: true, partialFilterExpression: { status: "scheduled" } }
+);
 
 const AppointmentModel =
   (mongoose.models.appointment as Model<Appointment> | undefined) ??

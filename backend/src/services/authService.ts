@@ -38,11 +38,21 @@ import {
   type RequestMetadata
 } from "./authSessionService.js";
 import { sendOtpEmail, sendPasswordResetEmail, sendVerificationEmail } from "./emailService.js";
+import { resolveAuthorizationContext } from "./organizationService.js";
 import { verifyRefreshToken } from "./tokenService.js";
+import {
+  createTwoFactorLoginChallenge,
+  getTwoFactorStatus,
+  verifyTwoFactorLoginChallenge
+} from "./twoFactorService.js";
+import { writeAuditLog } from "./auditService.js";
 
 export interface SafeAccountResponse {
   id: string;
   role: AccountType;
+  enterpriseRole?: string;
+  organizationId?: string;
+  permissions?: string[];
   name?: string;
   email: string;
   emailVerified: boolean;
@@ -51,6 +61,7 @@ export interface SafeAccountResponse {
 }
 
 export interface AuthResult {
+  requiresTwoFactor?: false;
   token: string;
   accessToken: string;
   refreshToken: string;
@@ -59,14 +70,29 @@ export interface AuthResult {
   account: SafeAccountResponse;
 }
 
+export interface TwoFactorRequiredResult {
+  requiresTwoFactor: true;
+  twoFactorToken: string;
+  expiresAt: Date;
+  account: SafeAccountResponse;
+}
+
+export type LoginResult = AuthResult | TwoFactorRequiredResult;
+
 export interface RegistrationResult {
   account: SafeAccountResponse;
   verificationExpiresAt: Date;
 }
 
-const safeAccount = (account: AuthAccount): SafeAccountResponse => ({
+const safeAccount = (
+  account: AuthAccount,
+  authorization?: Awaited<ReturnType<typeof resolveAuthorizationContext>>
+): SafeAccountResponse => ({
   id: account.id,
   role: account.type,
+  enterpriseRole: authorization?.role ?? account.role,
+  organizationId: authorization?.organizationId ?? account.organizationId,
+  permissions: authorization?.permissions,
   name: account.name,
   email: account.email,
   emailVerified: account.emailVerified,
@@ -86,22 +112,26 @@ const issueSession = async (
   account: AuthAccount,
   metadata: RequestMetadata
 ): Promise<AuthResult> => {
+  const authorization = await resolveAuthorizationContext(account);
   const bundle = await createSessionTokenBundle(
     {
       accountId: account.id,
       accountType: account.type,
-      email: account.email
+      email: account.email,
+      organizationId: authorization.organizationId,
+      enterpriseRole: authorization.role
     },
     metadata
   );
 
   return {
+    requiresTwoFactor: false,
     token: bundle.accessToken,
     accessToken: bundle.accessToken,
     refreshToken: bundle.refreshToken,
     refreshTokenExpiresAt: bundle.refreshTokenExpiresAt,
     sessionId: bundle.sessionId,
-    account: safeAccount(account)
+    account: safeAccount(account, authorization)
   };
 };
 
@@ -127,7 +157,8 @@ export const registerPatient = async (
       emailVerified: false,
       accountStatus: "PENDING_VERIFICATION",
       failedLoginAttempts: 0,
-      authenticationProvider: "LOCAL"
+      authenticationProvider: "LOCAL",
+      role: "PATIENT"
     }).save();
 
     const account = await findAccountById("patient", String(user._id));
@@ -147,6 +178,13 @@ export const registerPatient = async (
       );
     }
 
+    await writeAuditLog({
+      eventType: "auth.registration",
+      actor: { accountId: account.id, accountType: account.type, role: account.role },
+      target: { type: "account", id: account.id },
+      metadata: { publicRegistration: true }
+    });
+
     return {
       account: safeAccount(account),
       verificationExpiresAt: challenge.expiresAt
@@ -165,7 +203,7 @@ export const loginAccount = async (
   email: string,
   password: string,
   metadata: RequestMetadata
-): Promise<AuthResult> => {
+): Promise<LoginResult> => {
   const normalizedEmail = normalizeEmail(email);
   const account = await findAccountByEmail(accountType, normalizedEmail);
 
@@ -192,26 +230,69 @@ export const loginAccount = async (
   await recordSuccessfulLogin(account);
 
   const refreshedAccount = (await findAccountById(account.type, account.id)) ?? account;
-  return issueSession(refreshedAccount, metadata);
+  const twoFactorStatus = await getTwoFactorStatus(refreshedAccount);
+
+  if (twoFactorStatus.enabled) {
+    const challenge = await createTwoFactorLoginChallenge(refreshedAccount);
+    const authorization = await resolveAuthorizationContext(refreshedAccount);
+
+    return {
+      requiresTwoFactor: true,
+      twoFactorToken: challenge.twoFactorToken,
+      expiresAt: challenge.expiresAt,
+      account: safeAccount(refreshedAccount, authorization)
+    };
+  }
+
+  const result = await issueSession(refreshedAccount, metadata);
+  await writeAuditLog({
+    eventType: "auth.login.success",
+    actor: {
+      accountId: refreshedAccount.id,
+      accountType: refreshedAccount.type,
+      role: refreshedAccount.role
+    },
+    organizationId: result.account.organizationId,
+    target: { type: "account", id: refreshedAccount.id },
+    metadata: { twoFactor: false }
+  });
+
+  return result;
 };
 
 export const loginPatient = (
   email: string,
   password: string,
   metadata: RequestMetadata
-): Promise<AuthResult> => loginAccount("patient", email, password, metadata);
+): Promise<LoginResult> => loginAccount("patient", email, password, metadata);
 
 export const loginDoctorAccount = (
   email: string,
   password: string,
   metadata: RequestMetadata
-): Promise<AuthResult> => loginAccount("doctor", email, password, metadata);
+): Promise<LoginResult> => loginAccount("doctor", email, password, metadata);
 
 export const loginAdminAccount = (
   email: string,
   password: string,
   metadata: RequestMetadata
-): Promise<AuthResult> => loginAccount("admin", email, password, metadata);
+): Promise<LoginResult> => loginAccount("admin", email, password, metadata);
+
+export const verifyTwoFactorLogin = async (
+  twoFactorToken: string,
+  totpCode: string | undefined,
+  recoveryCode: string | undefined,
+  metadata: RequestMetadata
+): Promise<AuthResult> => {
+  const account = await verifyTwoFactorLoginChallenge(
+    twoFactorToken,
+    { totpCode, recoveryCode },
+    metadata
+  );
+  const refreshedAccount = (await findAccountById(account.type, account.id)) ?? account;
+
+  return issueSession(refreshedAccount, metadata);
+};
 
 export const refreshAccessToken = async (
   refreshToken: string,
@@ -225,16 +306,18 @@ export const refreshAccessToken = async (
   }
 
   assertAccessAllowed(account);
+  const authorization = await resolveAuthorizationContext(account);
 
-  const rotated = await rotateRefreshToken(refreshToken, metadata);
+  const rotated = await rotateRefreshToken(refreshToken, metadata, authorization);
 
   return {
+    requiresTwoFactor: false,
     token: rotated.bundle.accessToken,
     accessToken: rotated.bundle.accessToken,
     refreshToken: rotated.bundle.refreshToken,
     refreshTokenExpiresAt: rotated.bundle.refreshTokenExpiresAt,
     sessionId: rotated.bundle.sessionId,
-    account: safeAccount(account)
+    account: safeAccount(account, authorization)
   };
 };
 

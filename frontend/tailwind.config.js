@@ -1,7 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
-    "./index.html",
+    "./src/app/**/*.{js,ts,jsx,tsx}",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
@@ -10,7 +10,11 @@ export default {
         'auto':'repeat(auto-fill, minmax(200px, 1fr))'
       },
       colors:{
-        'primary':'#5F6FFF'
+        'primary':'#0F6F85',
+        'teal':'#0C8F8C',
+        'ink':'#153048',
+        'mist':'#F3F8FA',
+        'line':'#D7E5E9'
       }
     },
   },

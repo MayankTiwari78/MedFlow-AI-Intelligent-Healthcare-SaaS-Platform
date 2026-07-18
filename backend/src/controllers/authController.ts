@@ -15,6 +15,8 @@ import {
   requestOtp,
   resendVerification,
   resetPassword,
+  type LoginResult,
+  verifyTwoFactorLogin,
   verifyEmailToken,
   verifyOtp
 } from "../services/authService.js";
@@ -32,7 +34,16 @@ const requestMetadata = (req: Request) => ({
   userAgent: req.get("user-agent")
 });
 
-const sendLoginResponse = (res: Response, result: Awaited<ReturnType<typeof loginAccount>>) => {
+const sendLoginResponse = (res: Response, result: LoginResult) => {
+  if (result.requiresTwoFactor) {
+    return sendSuccess(res, 202, "Two-factor verification required", {
+      requiresTwoFactor: true,
+      twoFactorToken: result.twoFactorToken,
+      expiresAt: result.expiresAt,
+      account: result.account
+    });
+  }
+
   setRefreshTokenCookie(res, result.refreshToken, result.refreshTokenExpiresAt);
   return sendSuccess(
     res,
@@ -86,6 +97,21 @@ export const unifiedLogin: RequestHandler = asyncHandler(async (req, res) => {
     accountType: AccountType;
   };
   const result = await loginAccount(accountType, email, password, requestMetadata(req));
+  sendLoginResponse(res, result);
+});
+
+export const verifyTwoFactorLoginRequest: RequestHandler = asyncHandler(async (req, res) => {
+  const { twoFactorToken, totpCode, recoveryCode } = req.body as {
+    twoFactorToken: string;
+    totpCode?: string;
+    recoveryCode?: string;
+  };
+  const result = await verifyTwoFactorLogin(
+    twoFactorToken,
+    totpCode,
+    recoveryCode,
+    requestMetadata(req)
+  );
   sendLoginResponse(res, result);
 });
 

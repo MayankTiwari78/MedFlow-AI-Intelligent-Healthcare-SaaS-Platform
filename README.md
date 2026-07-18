@@ -1,8 +1,10 @@
-# MedFlow AI
+# MedFlow AI – Intelligent Healthcare SaaS Platform
+
+Developed and maintained by **Mayank Tiwari**.
 
 MedFlow AI is a healthcare SaaS platform with separate patient, doctor, and admin web clients backed by an Express API.
 
-## Phase 1A and 1B Status
+## Phase 1A Through 1D Status
 
 Phase 1A establishes the enterprise backend foundation:
 
@@ -31,12 +33,33 @@ Phase 1B adds enterprise authentication foundations:
 - Legacy `/api/user`, `/api/doctor`, and `/api/admin` login compatibility with deprecated legacy headers
 - Frontend/admin Axios compatibility for credentialed refresh-cookie support and one retry after 401
 
+Phase 1C adds enterprise authorization and account-security foundations:
+
+- Central enterprise roles: `SUPER_ADMIN`, `HOSPITAL_ADMIN`, `DOCTOR`, `STAFF`, and `PATIENT`
+- Central permission mapping for users, doctors, appointments, reports, billing, sessions, audit logs, roles, organizations, and settings
+- Server-side authorization middleware for role checks, permission checks, organization membership, tenant scope, and ownership-or-permission access
+- Organization and membership models with active-membership uniqueness and membership lifecycle statuses
+- Tenant-scoped authorization for new writes and protected compatibility paths, with migration fallback for existing unscoped records
+- Authenticator-app TOTP setup through maintained `otplib`, QR setup data through maintained `qrcode`, encrypted TOTP secret storage, short-lived 2FA login challenge tokens, and one-time hashed recovery codes
+- Session-management APIs for listing, renaming, revoking selected sessions, revoking other sessions, and revoking all sessions
+- Structured persistent audit logs with tenant-scoped query APIs requiring `audit:read`
+- Admin membership-management and audit-log screens; patient/admin/doctor security and active-session screens
+- Idempotent Phase 1C backfill script for roles, default organization, memberships, organization associations, auth-security defaults, and indexes
+
+Phase 1D completes the platform hardening and delivery baseline:
+
+- Pino JSON logging with request IDs and sensitive-value redaction
+- OpenAPI 3.0 JSON at `/api-docs.json` and environment-gated Swagger UI at `/api-docs`
+- Patient and admin/doctor clients migrated from Vite/React Router to Next.js App Router with TypeScript checks, preserved route maps, browser-safe token initialization, and standalone production output
+- Dockerfiles for the API and both Next.js clients, plus a local Docker Compose stack
+
 ## Project Structure
 
 ```text
-admin/      React/Vite admin and doctor panel
+admin/      Next.js admin and doctor portal
 backend/    TypeScript Express API
-frontend/   React/Vite patient app
+frontend/   Next.js patient app
+docs/       local deployment guidance
 ```
 
 Backend structure:
@@ -104,6 +127,14 @@ Required backend environment variables:
 - `AUTH_LOCK_DURATION`
 - `COOKIE_NAME`
 - `COOKIE_SAME_SITE`
+- `TWO_FACTOR_ENCRYPTION_KEY`
+- `TOTP_ISSUER`
+- `TOTP_SETUP_EXPIRES_IN`
+- `TWO_FACTOR_CHALLENGE_EXPIRES_IN`
+- `TWO_FACTOR_MAX_ATTEMPTS`
+- `RECOVERY_CODE_COUNT`
+- `DEFAULT_ORGANIZATION_NAME`
+- `DEFAULT_ORGANIZATION_SLUG`
 
 ## Backend Commands
 
@@ -116,6 +147,29 @@ npm run lint       # ESLint
 npm run format     # Prettier
 npm run test       # Vitest/Supertest
 ```
+
+## Client Commands
+
+Both `frontend/` and `admin/` use Next.js App Router and provide the same scripts:
+
+```bash
+npm run dev
+npm run typecheck
+npm run lint
+npm run test
+npm run build
+npm run start
+```
+
+Patient app routes preserve appointment, profile, payment, verification, OTP, 2FA, and session-security flows. The portal preserves administrator, doctor, RBAC, membership, audit-log, 2FA, and session-security routes. Existing API authorization remains server-enforced.
+
+## Observability And API Docs
+
+The API emits structured Pino logs with an `x-request-id` for each request and redacts passwords, authorization values, tokens, OTPs, recovery codes, cookies, encryption keys, payment data, and SMTP settings. OpenAPI JSON is served at `/api-docs.json`; Swagger UI at `/api-docs` is enabled only in development or when `ENABLE_API_DOCS=true`.
+
+## Docker
+
+Local Compose guidance is available in [docs/deployment.md](./docs/deployment.md). The stack is local-only and uses placeholders in the root `.env.example`; do not commit a real `.env` or use the development Compose defaults for production.
 
 ## API Overview
 
@@ -167,6 +221,27 @@ Phase 1B auth API:
 - `POST /api/v1/auth/otp/request`
 - `POST /api/v1/auth/otp/verify`
 
+Phase 1C security and authorization API:
+
+- `POST /api/v1/auth/2fa/login/verify`
+- `GET /api/v1/auth/2fa/status`
+- `POST /api/v1/auth/2fa/setup/begin`
+- `POST /api/v1/auth/2fa/setup/confirm`
+- `POST /api/v1/auth/2fa/disable`
+- `POST /api/v1/auth/2fa/recovery-codes/regenerate`
+- `GET /api/v1/auth/sessions`
+- `PATCH /api/v1/auth/sessions/:sessionId`
+- `DELETE /api/v1/auth/sessions/:sessionId`
+- `POST /api/v1/auth/sessions/revoke-others`
+- `POST /api/v1/auth/sessions/revoke-all`
+- `GET /api/v1/authorization/me`
+- `GET /api/v1/authorization/roles`
+- `GET /api/v1/organizations/current`
+- `POST /api/v1/organizations`
+- `GET /api/v1/organizations/:organizationId/memberships`
+- `PUT /api/v1/organizations/:organizationId/memberships`
+- `GET /api/v1/audit-logs`
+
 Health checks:
 
 - `GET /health`
@@ -182,22 +257,26 @@ Legacy auth headers `token`, `aToken`, and `dToken` still work but are deprecate
 
 Stripe verification now requires the backend-created Checkout Session id. The frontend verify page sends `session_id` back to `/api/user/verifyStripe`; the backend no longer marks payments as successful based only on a frontend `success=true` value.
 
-## Upcoming Phases
+## Phase 1C Migration
 
-These are intentionally not implemented in Phase 1B:
+Run the Phase 1C backfill explicitly after reviewing the target environment:
 
-- Two-factor authentication
-- Enterprise RBAC
-- Full session-management dashboard
-- Organization-scoped authorization
-- Complete multi-tenancy
-- Next.js migration
-- AI features
-- Docker
-- Swagger
+```bash
+cd backend
+npx tsx src/scripts/backfillPhase1C.ts
+```
+
+The script is idempotent. It creates or reuses the configured default organization, maps existing users to `PATIENT`, doctors to `DOCTOR`, the configured admin compatibility account to `HOSPITAL_ADMIN`, creates missing active memberships, fills missing organization IDs, creates disabled 2FA security records, and reports membership conflicts. It never creates `SUPER_ADMIN`, deletes accounts, or rewrites medical/payment data.
+
+## Out Of Scope
+
+The Phase 1D delivery baseline intentionally does not implement complete multi-tenancy, full SaaS billing/subscriptions, AI healthcare features, video consultation, medical-report AI, production cloud infrastructure, Kubernetes, or a production reverse-proxy/TLS deployment. Docker Compose is provided for safe local verification only.
 
 ## Developer
 
 Mayank Tiwari
+
+Third-party open-source notices are available in
+[THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).
 
 GitHub: https://github.com/MayankTiwari78

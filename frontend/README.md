@@ -1,8 +1,17 @@
-# React + Vite
+# MedFlow AI Patient App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The patient client uses Next.js App Router. It preserves the appointment discovery and booking, profile, payment verification, email verification, password recovery, OTP, TOTP login, recovery-code, session, and account-security routes from the prior client.
 
-Currently, two official plugins are available:
+```bash
+npm install
+npm run dev
+npm run typecheck
+npm run lint
+npm run test
+npm run build
+npm run test:e2e
+```
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Set `NEXT_PUBLIC_BACKEND_URL` and `NEXT_PUBLIC_RAZORPAY_KEY_ID` in a local `.env` using `.env.example` placeholders. Values prefixed `NEXT_PUBLIC_` are intentionally browser-visible; never place private secrets in this client configuration.
+
+The production build uses Next standalone output. Local Compose instructions are in [../docs/deployment.md](../docs/deployment.md).

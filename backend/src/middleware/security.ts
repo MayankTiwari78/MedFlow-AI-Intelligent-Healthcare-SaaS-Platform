@@ -7,7 +7,17 @@ import { env } from "../config/env.js";
 import { AppError } from "../utils/AppError.js";
 import { getCookie } from "../utils/cookies.js";
 
-const allowedOrigins = new Set([env.CLIENT_URL, env.ADMIN_URL]);
+const developmentOrigins = env.isDevelopment
+  ? [
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+      "http://localhost:3001",
+      "http://127.0.0.1:3001"
+    ]
+  : [];
+
+// Keep production origin access explicit while supporting both local loopback forms in development.
+const allowedOrigins = new Set([env.CLIENT_URL, env.ADMIN_URL, ...developmentOrigins]);
 
 export const helmetMiddleware = helmet();
 

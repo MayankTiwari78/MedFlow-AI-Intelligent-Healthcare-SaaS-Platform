@@ -7,6 +7,7 @@ import {
   GENERIC_AUTH_ERROR,
   type AuthenticationProvider
 } from "../constants/auth.js";
+import { defaultRoleForAccountType, type EnterpriseRole } from "../constants/rbac.js";
 import DoctorModel from "../models/Doctor.js";
 import UserModel from "../models/User.js";
 import { AppError } from "../utils/AppError.js";
@@ -29,6 +30,8 @@ interface AccountRecord {
   passwordChangedAt?: Date;
   lastLoginAt?: Date;
   authenticationProvider?: AuthenticationProvider;
+  role?: EnterpriseRole;
+  organizationId?: string;
 }
 
 interface AdminLockState {
@@ -51,6 +54,8 @@ export interface AuthAccount {
   passwordChangedAt?: Date;
   lastLoginAt?: Date;
   authenticationProvider: AuthenticationProvider;
+  role: EnterpriseRole;
+  organizationId?: string;
 }
 
 const adminLocks = new Map<string, AdminLockState>();
@@ -72,7 +77,9 @@ const documentToAccount = (
   lockedUntil: record.lockedUntil,
   passwordChangedAt: record.passwordChangedAt,
   lastLoginAt: record.lastLoginAt,
-  authenticationProvider: record.authenticationProvider ?? "LOCAL"
+  authenticationProvider: record.authenticationProvider ?? "LOCAL",
+  role: record.role ?? defaultRoleForAccountType(type),
+  organizationId: record.organizationId
 });
 
 const adminAccount = (): AuthAccount => {
@@ -89,7 +96,8 @@ const adminAccount = (): AuthAccount => {
     accountStatus: "ACTIVE",
     failedLoginAttempts: lockState?.attempts ?? 0,
     lockedUntil: lockState?.lockedUntil,
-    authenticationProvider: "LOCAL"
+    authenticationProvider: "LOCAL",
+    role: "HOSPITAL_ADMIN"
   };
 };
 

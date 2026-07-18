@@ -7,7 +7,8 @@ import {
   type AuthenticationProvider
 } from "../constants/auth.js";
 import { DEFAULT_USER_IMAGE } from "../constants/defaults.js";
-import type { Address } from "../types/domain.js";
+import { ENTERPRISE_ROLES, type EnterpriseRole } from "../constants/rbac.js";
+import type { Address, PatientHealthProfile } from "../types/domain.js";
 
 export interface User {
   name: string;
@@ -18,7 +19,10 @@ export interface User {
   address: Address;
   gender: string;
   dob: string;
+  healthProfile: PatientHealthProfile;
   password: string;
+  role: EnterpriseRole;
+  organizationId?: string;
   emailVerified: boolean;
   emailVerifiedAt?: Date;
   accountStatus: AccountStatus;
@@ -41,6 +45,27 @@ const addressSchema = new mongoose.Schema<Address>(
   { _id: false }
 );
 
+const healthProfileSchema = new mongoose.Schema<PatientHealthProfile>(
+  {
+    bloodGroup: { type: String, default: "Not known" },
+    allergies: { type: [String], default: [] },
+    chronicConditions: { type: [String], default: [] },
+    medicalNotes: { type: String, default: "" },
+    emergencyContact: {
+      name: { type: String, default: "" },
+      relationship: { type: String, default: "" },
+      phone: { type: String, default: "" }
+    },
+    insurance: {
+      provider: { type: String, default: "" },
+      policyNumber: { type: String, default: "" },
+      expiryDate: { type: String, default: "" }
+    },
+    updatedAt: { type: Date }
+  },
+  { _id: false }
+);
+
 const userSchema = new mongoose.Schema<User>(
   {
     name: { type: String, required: true, trim: true },
@@ -51,7 +76,10 @@ const userSchema = new mongoose.Schema<User>(
     address: { type: addressSchema, default: () => ({ line1: "", line2: "" }) },
     gender: { type: String, default: "Not Selected" },
     dob: { type: String, default: "Not Selected" },
+    healthProfile: { type: healthProfileSchema, default: () => ({}) },
     password: { type: String, required: true },
+    role: { type: String, enum: ENTERPRISE_ROLES, default: "PATIENT", index: true },
+    organizationId: { type: String, index: true },
     emailVerified: { type: Boolean, default: true },
     emailVerifiedAt: { type: Date },
     accountStatus: {

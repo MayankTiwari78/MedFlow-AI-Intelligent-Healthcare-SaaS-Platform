@@ -2,12 +2,16 @@ import jwt, { type JwtPayload, type SignOptions } from "jsonwebtoken";
 
 import { env } from "../config/env.js";
 import type { AccountType } from "../constants/auth.js";
+import type { EnterpriseRole } from "../constants/rbac.js";
 import { AppError } from "../utils/AppError.js";
 
 export interface AccessTokenInput {
   accountId: string;
   accountType: AccountType;
   email?: string;
+  sessionId?: string;
+  organizationId?: string;
+  enterpriseRole?: EnterpriseRole;
 }
 
 export interface RefreshTokenInput extends AccessTokenInput {
@@ -21,6 +25,9 @@ export interface AccessTokenPayload extends JwtPayload {
   role: AccountType;
   id?: string;
   email?: string;
+  sessionId?: string;
+  organizationId?: string;
+  enterpriseRole?: EnterpriseRole;
   sub: string;
 }
 
@@ -30,6 +37,23 @@ export interface RefreshTokenPayload extends JwtPayload {
   sessionId: string;
   tokenId: string;
   tokenFamilyId: string;
+  organizationId?: string;
+  enterpriseRole?: EnterpriseRole;
+  sub: string;
+}
+
+export interface TwoFactorChallengeTokenInput {
+  accountId: string;
+  accountType: AccountType;
+  challengeId: string;
+  email?: string;
+}
+
+export interface TwoFactorChallengePayload extends JwtPayload {
+  tokenType: "two_factor_challenge";
+  role: AccountType;
+  challengeId: string;
+  email?: string;
   sub: string;
 }
 
@@ -50,10 +74,20 @@ const requireObjectPayload = (payload: JwtPayload | string): JwtPayload => {
 const isAccountType = (value: unknown): value is AccountType =>
   value === "patient" || value === "doctor" || value === "admin";
 
-export const signAccessToken = ({ accountId, accountType, email }: AccessTokenInput): string => {
+export const signAccessToken = ({
+  accountId,
+  accountType,
+  email,
+  sessionId,
+  organizationId,
+  enterpriseRole
+}: AccessTokenInput): string => {
   const payload = {
     tokenType: "access",
     role: accountType,
+    ...(sessionId ? { sessionId } : {}),
+    ...(organizationId ? { organizationId } : {}),
+    ...(enterpriseRole ? { enterpriseRole } : {}),
     ...(accountType === "admin" ? { email } : { id: accountId })
   };
 
@@ -69,7 +103,9 @@ export const signRefreshToken = ({
   email,
   sessionId,
   tokenId,
-  tokenFamilyId
+  tokenFamilyId,
+  organizationId,
+  enterpriseRole
 }: RefreshTokenInput): string =>
   jwt.sign(
     {
@@ -78,11 +114,33 @@ export const signRefreshToken = ({
       sessionId,
       tokenId,
       tokenFamilyId,
+      ...(organizationId ? { organizationId } : {}),
+      ...(enterpriseRole ? { enterpriseRole } : {}),
       ...(accountType === "admin" ? { email } : {})
     },
     env.JWT_REFRESH_SECRET,
     {
       ...signOptions(env.REFRESH_TOKEN_EXPIRES_IN),
+      subject: accountId
+    }
+  );
+
+export const signTwoFactorChallengeToken = ({
+  accountId,
+  accountType,
+  challengeId,
+  email
+}: TwoFactorChallengeTokenInput): string =>
+  jwt.sign(
+    {
+      tokenType: "two_factor_challenge",
+      role: accountType,
+      challengeId,
+      ...(email ? { email } : {})
+    },
+    env.JWT_ACCESS_SECRET,
+    {
+      ...signOptions(env.TWO_FACTOR_CHALLENGE_EXPIRES_IN),
       subject: accountId
     }
   );
@@ -141,6 +199,34 @@ export const verifyRefreshToken = (token: string): RefreshTokenPayload => {
     }
 
     throw new AppError("Invalid refresh token", 401);
+  }
+};
+
+export const verifyTwoFactorChallengeToken = (token: string): TwoFactorChallengePayload => {
+  try {
+    const payload = requireObjectPayload(
+      jwt.verify(token, env.JWT_ACCESS_SECRET, {
+        issuer: env.JWT_ISSUER,
+        audience: env.JWT_AUDIENCE
+      })
+    );
+
+    if (
+      payload.tokenType !== "two_factor_challenge" ||
+      typeof payload.sub !== "string" ||
+      typeof payload.challengeId !== "string" ||
+      !isAccountType(payload.role)
+    ) {
+      throw new AppError("Invalid two-factor challenge", 401);
+    }
+
+    return payload as TwoFactorChallengePayload;
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+
+    throw new AppError("Invalid two-factor challenge", 401);
   }
 };
 

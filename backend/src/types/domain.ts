@@ -3,6 +3,40 @@ export interface Address {
   line2: string;
 }
 
+export interface EmergencyContact {
+  name: string;
+  relationship: string;
+  phone: string;
+}
+
+export interface InsuranceDetails {
+  provider: string;
+  policyNumber: string;
+  expiryDate: string;
+}
+
+export interface PatientHealthProfile {
+  bloodGroup: string;
+  allergies: string[];
+  chronicConditions: string[];
+  medicalNotes: string;
+  emergencyContact: EmergencyContact;
+  insurance: InsuranceDetails;
+  updatedAt?: Date;
+}
+
+export interface DoctorAvailabilityDay {
+  dayOfWeek: number;
+  slots: string[];
+}
+
+export interface DoctorAvailability {
+  enabled: boolean;
+  timezone: string;
+  consultationDurationMinutes: number;
+  weeklySchedule: DoctorAvailabilityDay[];
+}
+
 export interface UserProfileSnapshot {
   _id?: unknown;
   name: string;

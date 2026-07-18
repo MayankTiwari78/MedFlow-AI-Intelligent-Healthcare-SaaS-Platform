@@ -1,21 +1,24 @@
 import React from 'react'
 import { specialityData } from '../assets/assets'
-import { Link } from 'react-router-dom'
+import { Link } from '../lib/routerCompat'
 
 const SpecialityMenu = () => {
     return (
-        <div id='speciality' className='flex flex-col items-center gap-4 py-16 text-[#262626]'>
-            <h1 className='text-3xl font-medium'>Find by Speciality</h1>
-            <p className='sm:w-1/3 text-center text-sm'>Simply browse through our extensive list of trusted doctors, schedule your appointment hassle-free.</p>
-            <div className='flex sm:justify-center gap-4 pt-5 w-full overflow-scroll '>
+        <section id='speciality' className='mf-section'>
+            <div className='flex flex-col items-center gap-2 text-center'>
+              <p className='mf-eyebrow'>Start with what you need</p>
+              <h2 className='mf-title'>Care across every speciality</h2>
+              <p className='mf-copy'>Browse experienced clinicians and move from discovery to booking in a few calm, clear steps.</p>
+            </div>
+            <div className='mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6'>
                 {specialityData.map((item, index) => (
-                    <Link to={`/doctors/${item.speciality}`} onClick={() => scrollTo(0, 0)} className='flex flex-col items-center text-xs cursor-pointer flex-shrink-0 hover:translate-y-[-10px] transition-all duration-500' key={index}>
-                        <img className='w-16 sm:w-24 mb-2 ' src={item.image} alt="" />
+                    <Link to={`/doctors/${item.speciality}`} onClick={() => scrollTo(0, 0)} className='mf-card flex min-h-36 flex-col items-center justify-center gap-3 px-3 py-5 text-center text-sm font-semibold text-ink transition duration-200 hover:-translate-y-1 hover:border-teal' key={index}>
+                        <img className='w-14 sm:w-16' src={item.image} alt="" />
                         <p>{item.speciality}</p>
                     </Link>
                 ))}
             </div>
-        </div>
+        </section>
     )
 }
 

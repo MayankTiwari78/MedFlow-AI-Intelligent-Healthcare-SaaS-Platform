@@ -3,11 +3,16 @@ import type { JwtPayload } from "jsonwebtoken";
 
 import { env } from "../config/env.js";
 import type { AccountType } from "../constants/auth.js";
+import type { EnterpriseRole, Permission } from "../constants/rbac.js";
 import {
   assertAccessAllowed,
   findAccountById,
   type AuthAccount
 } from "../services/accountService.js";
+import {
+  resolveAuthorizationContext,
+  type AuthorizationContext
+} from "../services/organizationService.js";
 import {
   verifyAccessToken,
   verifyLegacyToken,
@@ -87,23 +92,31 @@ const assertTokenNotInvalidatedByPasswordChange = (
 const attachRequestAccount = (
   req: Request,
   payload: AccessTokenPayload | JwtPayload | string,
-  accountType: AccountType,
-  accountId: string
+  account: AuthAccount,
+  authorization: AuthorizationContext
 ): void => {
   req.auth = payload;
-  req.authAccountType = accountType;
-  req.authAccountId = accountId;
+  req.authAccountType = account.type;
+  req.authAccountId = account.id;
+  req.authRole = authorization.role;
+  req.authPermissions = authorization.permissions;
+  req.authOrganizationId = authorization.organizationId;
+  req.authMembershipId = authorization.membershipId;
 
-  if (accountType === "patient") {
-    req.authUserId = accountId;
-  } else if (accountType === "doctor") {
-    req.authDoctorId = accountId;
+  if (typeof payload !== "string" && typeof payload.sessionId === "string") {
+    req.authSessionId = payload.sessionId;
+  }
+
+  if (account.type === "patient") {
+    req.authUserId = account.id;
+  } else if (account.type === "doctor") {
+    req.authDoctorId = account.id;
   } else {
     req.authAdminEmail = env.ADMIN_EMAIL;
   }
 };
 
-const authenticate = async (
+export const authenticate = async (
   req: Request,
   expectedAccountType?: AccountType,
   legacyHeader?: string
@@ -123,7 +136,14 @@ const authenticate = async (
       throw new AppError("Not Authorized Login Again", 401);
     }
 
-    attachRequestAccount(req, payload, "admin", env.ADMIN_EMAIL);
+    const account = await findAccountById("admin", env.ADMIN_EMAIL);
+
+    if (!account) {
+      throw new AppError("Not Authorized Login Again", 401);
+    }
+
+    const authorization = await resolveAuthorizationContext(account);
+    attachRequestAccount(req, payload, account, authorization);
     return;
   }
 
@@ -143,7 +163,14 @@ const authenticate = async (
       throw new AppError("Not Authorized Login Again", 401);
     }
 
-    attachRequestAccount(req, payload, "admin", env.ADMIN_EMAIL);
+    const account = await findAccountById("admin", env.ADMIN_EMAIL);
+
+    if (!account) {
+      throw new AppError("Not Authorized Login Again", 401);
+    }
+
+    const authorization = await resolveAuthorizationContext(account);
+    attachRequestAccount(req, payload, account, authorization);
     return;
   }
 
@@ -159,8 +186,93 @@ const authenticate = async (
 
   assertAccessAllowed(account);
   assertTokenNotInvalidatedByPasswordChange(payload, account);
-  attachRequestAccount(req, payload, accountType, accountId);
+  const authorization = await resolveAuthorizationContext(account);
+  attachRequestAccount(req, payload, account, authorization);
 };
+
+export const authorizeRoles =
+  (...roles: EnterpriseRole[]): RequestHandler =>
+  (req, _res, next) => {
+    if (!req.authRole) {
+      next(new AppError("Not Authorized Login Again", 401));
+      return;
+    }
+
+    if (!roles.includes(req.authRole)) {
+      next(new AppError("Forbidden", 403));
+      return;
+    }
+
+    next();
+  };
+
+export const authorizePermissions =
+  (...permissions: Permission[]): RequestHandler =>
+  (req, _res, next) => {
+    if (!req.authPermissions) {
+      next(new AppError("Not Authorized Login Again", 401));
+      return;
+    }
+
+    const hasEveryPermission = permissions.every((permission) =>
+      req.authPermissions?.includes(permission)
+    );
+
+    if (!hasEveryPermission) {
+      next(new AppError("Forbidden", 403));
+      return;
+    }
+
+    next();
+  };
+
+export const requireOrganization: RequestHandler = (req, _res, next) => {
+  if (!req.authOrganizationId) {
+    next(new AppError("Organization membership is required", 403));
+    return;
+  }
+
+  next();
+};
+
+export const enforceTenantScope =
+  (organizationIdFromRequest: (req: Request) => string | undefined): RequestHandler =>
+  (req, _res, next) => {
+    const resourceOrganizationId = organizationIdFromRequest(req);
+
+    if (!resourceOrganizationId || req.authRole === "SUPER_ADMIN") {
+      next();
+      return;
+    }
+
+    if (req.authOrganizationId !== resourceOrganizationId) {
+      next(new AppError("Resource not found", 404));
+      return;
+    }
+
+    next();
+  };
+
+export const enforceOwnershipOrPermission =
+  ({
+    ownerIdFromRequest,
+    permission
+  }: {
+    ownerIdFromRequest: (req: Request) => string | undefined;
+    permission: Permission;
+  }): RequestHandler =>
+  (req, _res, next) => {
+    const ownerId = ownerIdFromRequest(req);
+    const isOwner = Boolean(ownerId && req.authAccountId === ownerId);
+    const hasPermission = Boolean(req.authPermissions?.includes(permission));
+
+    if (!isOwner && !hasPermission) {
+      next(new AppError("Forbidden", 403));
+      return;
+    }
+
+    next();
+  };
 
 export const authUser: RequestHandler = async (req, _res, next) => {
   try {

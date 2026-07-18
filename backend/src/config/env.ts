@@ -24,8 +24,8 @@ const envSchema = z.object({
   REFRESH_TOKEN_EXPIRES_IN: z.string().trim().min(1).default("30d"),
   JWT_ISSUER: z.string().trim().min(1).default("medflow-ai"),
   JWT_AUDIENCE: z.string().trim().min(1).default("medflow-ai-clients"),
-  CLIENT_URL: z.string().trim().url().default("http://localhost:5173"),
-  ADMIN_URL: z.string().trim().url().default("http://localhost:5174"),
+  CLIENT_URL: z.string().trim().url().default("http://localhost:3000"),
+  ADMIN_URL: z.string().trim().url().default("http://localhost:3001"),
   ADMIN_EMAIL: z
     .string()
     .trim()
@@ -52,7 +52,18 @@ const envSchema = z.object({
   AUTH_LOCK_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
   AUTH_LOCK_DURATION: z.string().trim().min(1).default("15m"),
   COOKIE_NAME: z.string().trim().min(1).default("medflow_refresh"),
-  COOKIE_SAME_SITE: z.enum(["lax", "strict", "none"]).default("lax")
+  COOKIE_SAME_SITE: z.enum(["lax", "strict", "none"]).default("lax"),
+  TWO_FACTOR_ENCRYPTION_KEY: z.string().trim().min(32).optional(),
+  TOTP_ISSUER: z.string().trim().min(1).default("MedFlow AI Enterprise"),
+  TOTP_SETUP_EXPIRES_IN: z.string().trim().min(1).default("10m"),
+  TWO_FACTOR_CHALLENGE_EXPIRES_IN: z.string().trim().min(1).default("5m"),
+  TWO_FACTOR_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+  RECOVERY_CODE_COUNT: z.coerce.number().int().positive().max(20).default(10),
+  DEFAULT_ORGANIZATION_NAME: z.string().trim().min(1).default("MedFlow Default Hospital"),
+  DEFAULT_ORGANIZATION_SLUG: z.string().trim().min(1).default("medflow-default"),
+  LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
+  SERVICE_NAME: z.string().trim().min(1).default("medflow-backend"),
+  ENABLE_API_DOCS: booleanFromEnv.default(false)
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
@@ -70,7 +81,8 @@ const productionMissingFields = [
   ["SMTP_HOST", parsedEnv.data.SMTP_HOST],
   ["SMTP_USER", parsedEnv.data.SMTP_USER],
   ["SMTP_PASSWORD", parsedEnv.data.SMTP_PASSWORD],
-  ["EMAIL_FROM", parsedEnv.data.EMAIL_FROM]
+  ["EMAIL_FROM", parsedEnv.data.EMAIL_FROM],
+  ["TWO_FACTOR_ENCRYPTION_KEY", parsedEnv.data.TWO_FACTOR_ENCRYPTION_KEY]
 ].filter(([, value]) => !value);
 
 if (parsedEnv.data.NODE_ENV === "production" && productionMissingFields.length > 0) {
@@ -98,6 +110,9 @@ export const env = {
   SMTP_HOST: parsedEnv.data.SMTP_HOST ?? "",
   SMTP_USER: parsedEnv.data.SMTP_USER ?? "",
   SMTP_PASSWORD: parsedEnv.data.SMTP_PASSWORD ?? "",
+  TWO_FACTOR_ENCRYPTION_KEY:
+    parsedEnv.data.TWO_FACTOR_ENCRYPTION_KEY ??
+    `${parsedEnv.data.JWT_REFRESH_SECRET ?? parsedEnv.data.JWT_SECRET}-two-factor-development-only`,
   isDevelopment: parsedEnv.data.NODE_ENV === "development",
   isTest: parsedEnv.data.NODE_ENV === "test",
   isProduction: parsedEnv.data.NODE_ENV === "production"

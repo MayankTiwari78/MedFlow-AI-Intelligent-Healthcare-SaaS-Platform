@@ -1,15 +1,16 @@
 import { useContext } from 'react'
-import { assets } from '../assets/assets'
 import { DoctorContext } from '../context/DoctorContext'
 import { AdminContext } from '../context/AdminContext'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from '../lib/routerCompat'
 import { logoutAdminSession } from '../api/authClient'
+import { publicEnv } from '../lib/env'
+import BrandLogo from './BrandLogo'
 
 const Navbar = () => {
 
   const { dToken, setDToken } = useContext(DoctorContext)
   const { aToken, setAToken } = useContext(AdminContext)
-  const backendUrl = import.meta.env.VITE_BACKEND_URL
+  const backendUrl = publicEnv.backendUrl
 
   const navigate = useNavigate()
 
@@ -17,19 +18,19 @@ const Navbar = () => {
     await logoutAdminSession(backendUrl)
     navigate('/')
     dToken && setDToken('')
-    dToken && localStorage.removeItem('dToken')
+    dToken && window.localStorage.removeItem('dToken')
     aToken && setAToken('')
-    aToken && localStorage.removeItem('aToken')
+    aToken && window.localStorage.removeItem('aToken')
   }
 
   return (
-    <div className='flex justify-between items-center px-4 sm:px-10 py-3 border-b bg-white'>
-      <div className='flex items-center gap-2 text-xs'>
-        <img onClick={() => navigate('/')} className='w-36 sm:w-40 cursor-pointer' src={assets.admin_logo} alt="" />
-        <p className='border px-2.5 py-0.5 rounded-full border-gray-500 text-gray-600'>{aToken ? 'Admin' : 'Doctor'}</p>
+    <header className='sticky top-0 z-30 flex min-h-20 justify-between items-center px-4 sm:px-8 lg:px-10 border-b border-line bg-white/95 backdrop-blur'>
+      <div className='flex items-center gap-3 text-xs'>
+        <BrandLogo onClick={() => navigate('/')} compact />
+        <p className='portal-status bg-[#E7F4F5] text-primary'>{aToken ? 'Hospital administration' : 'Clinical workspace'}</p>
       </div>
-      <button onClick={() => logout()} className='bg-primary text-white text-sm px-10 py-2 rounded-full'>Logout</button>
-    </div>
+      <button onClick={() => logout()} className='portal-button'>Log out</button>
+    </header>
   )
 }
 

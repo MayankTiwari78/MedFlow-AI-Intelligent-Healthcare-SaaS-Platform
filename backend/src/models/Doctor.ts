@@ -6,7 +6,8 @@ import {
   type AccountStatus,
   type AuthenticationProvider
 } from "../constants/auth.js";
-import type { Address } from "../types/domain.js";
+import { ENTERPRISE_ROLES, type EnterpriseRole } from "../constants/rbac.js";
+import type { Address, DoctorAvailability } from "../types/domain.js";
 
 export interface Doctor {
   name: string;
@@ -21,8 +22,11 @@ export interface Doctor {
   available: boolean;
   fees: number;
   slots_booked: Record<string, string[]>;
+  availability: DoctorAvailability;
   address: Address;
   date: number;
+  role: EnterpriseRole;
+  organizationId?: string;
   emailVerified: boolean;
   emailVerifiedAt?: Date;
   accountStatus: AccountStatus;
@@ -45,6 +49,33 @@ const addressSchema = new mongoose.Schema<Address>(
   { _id: false }
 );
 
+const defaultWeeklySchedule = () =>
+  [1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
+    dayOfWeek,
+    slots: ["10:00", "10:30", "11:00", "11:30", "14:00", "14:30", "15:00", "15:30"]
+  }));
+
+const availabilitySchema = new mongoose.Schema<DoctorAvailability>(
+  {
+    enabled: { type: Boolean, default: true },
+    timezone: { type: String, default: "Asia/Kolkata" },
+    consultationDurationMinutes: { type: Number, default: 30, min: 15, max: 120 },
+    weeklySchedule: {
+      type: [
+        new mongoose.Schema(
+          {
+            dayOfWeek: { type: Number, required: true, min: 0, max: 6 },
+            slots: { type: [String], default: [] }
+          },
+          { _id: false }
+        )
+      ],
+      default: defaultWeeklySchedule
+    }
+  },
+  { _id: false }
+);
+
 const doctorSchema = new mongoose.Schema<Doctor>(
   {
     name: { type: String, required: true, trim: true },
@@ -59,8 +90,11 @@ const doctorSchema = new mongoose.Schema<Doctor>(
     available: { type: Boolean, default: true },
     fees: { type: Number, required: true },
     slots_booked: { type: mongoose.Schema.Types.Mixed, default: {} },
+    availability: { type: availabilitySchema, default: () => ({}) },
     address: { type: addressSchema, required: true },
     date: { type: Number, required: true },
+    role: { type: String, enum: ENTERPRISE_ROLES, default: "DOCTOR", index: true },
+    organizationId: { type: String, index: true },
     emailVerified: { type: Boolean, default: true },
     emailVerifiedAt: { type: Date },
     accountStatus: {

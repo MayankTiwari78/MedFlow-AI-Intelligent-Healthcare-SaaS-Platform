@@ -8,6 +8,7 @@ let refreshPromise = null
 
 const tokenKeyForRole = (role) => (role === 'doctor' ? 'dToken' : 'aToken')
 const headerForRole = (role) => (role === 'doctor' ? 'dToken' : 'aToken')
+const inBrowser = () => typeof window !== 'undefined'
 
 const roleForUrl = (url = '') => {
   if (url.includes('/api/doctor/')) {
@@ -24,7 +25,9 @@ const roleForUrl = (url = '') => {
 const authEndpoint = (url = '') => url.includes('/api/v1/auth/')
 
 const persistToken = (role, token) => {
-  localStorage.setItem(tokenKeyForRole(role), token)
+  if (inBrowser()) {
+    window.localStorage.setItem(tokenKeyForRole(role), token)
+  }
 
   if (role === 'doctor') {
     setDoctorToken(token)
@@ -34,8 +37,10 @@ const persistToken = (role, token) => {
 }
 
 const clearTokens = () => {
-  localStorage.removeItem('aToken')
-  localStorage.removeItem('dToken')
+  if (inBrowser()) {
+    window.localStorage.removeItem('aToken')
+    window.localStorage.removeItem('dToken')
+  }
   setAdminToken('')
   setDoctorToken('')
 }
@@ -86,7 +91,7 @@ export const configureAdminAuth = ({ backendUrl, setAToken, setDToken }) => {
     const role = roleForUrl(url)
 
     if (role) {
-      const token = localStorage.getItem(tokenKeyForRole(role))
+      const token = inBrowser() ? window.localStorage.getItem(tokenKeyForRole(role)) : null
 
       if (token) {
         const header = headerForRole(role)

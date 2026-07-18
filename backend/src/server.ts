@@ -4,11 +4,12 @@ import app from "./app.js";
 import { configureCloudinary } from "./config/cloudinary.js";
 import { connectDB, disconnectDB } from "./config/database.js";
 import { env } from "./config/env.js";
+import { logger } from "./utils/logger.js";
 
 let server: http.Server | undefined;
 
 const shutdown = async (signal: string): Promise<void> => {
-  console.log(`${signal} received. Shutting down server.`);
+  logger.info({ event: "server.shutdown", signal }, "Shutting down server");
 
   if (server) {
     await new Promise<void>((resolve) => {
@@ -24,13 +25,16 @@ const start = (): void => {
   configureCloudinary();
 
   server = app.listen(env.PORT, () => {
-    console.log(`Server started on PORT:${env.PORT}`);
+    logger.info({ event: "server.started", port: env.PORT }, "Server started");
   });
 
   connectDB().catch((error: unknown) => {
-    console.error("Database startup connection failed");
+    logger.error({ event: "mongodb.startup_failed" }, "Database startup connection failed");
     if (env.isProduction) {
-      console.error(error instanceof Error ? error.message : "Unknown database error");
+      logger.fatal(
+        { err: error instanceof Error ? error : undefined },
+        error instanceof Error ? error.message : "Unknown database error"
+      );
       process.exit(1);
     }
   });
@@ -45,12 +49,12 @@ process.on("SIGINT", () => {
 });
 
 process.on("unhandledRejection", (reason) => {
-  console.error("Unhandled promise rejection", reason);
+  logger.error({ event: "process.unhandled_rejection", reason }, "Unhandled promise rejection");
   void shutdown("unhandledRejection");
 });
 
 process.on("uncaughtException", (error) => {
-  console.error("Uncaught exception", error);
+  logger.fatal({ event: "process.uncaught_exception", err: error }, "Uncaught exception");
   void shutdown("uncaughtException");
 });
 

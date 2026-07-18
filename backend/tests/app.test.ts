@@ -2,6 +2,7 @@ import type { Express } from "express";
 import jwt from "jsonwebtoken";
 import request from "supertest";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 process.env.NODE_ENV = "test";
 process.env.PORT = "4100";
@@ -28,6 +29,38 @@ process.env.EMAIL_FROM = "MedFlow AI <no-reply@example.test>";
 process.env.OTP_MAX_ATTEMPTS = "3";
 process.env.AUTH_LOCK_MAX_ATTEMPTS = "3";
 process.env.AUTH_LOCK_DURATION = "1s";
+process.env.LOG_LEVEL = "silent";
+process.env.TWO_FACTOR_ENCRYPTION_KEY = "test-two-factor-encryption-key-32-bytes-minimum";
+process.env.TOTP_ISSUER = "MedFlow AI Enterprise";
+process.env.TOTP_SETUP_EXPIRES_IN = "10m";
+process.env.TWO_FACTOR_CHALLENGE_EXPIRES_IN = "5m";
+process.env.TWO_FACTOR_MAX_ATTEMPTS = "3";
+process.env.RECOVERY_CODE_COUNT = "4";
+process.env.DEFAULT_ORGANIZATION_NAME = "Test Hospital";
+process.env.DEFAULT_ORGANIZATION_SLUG = "test-hospital";
+
+const appointmentResponseSchema = z
+  .object({
+    _id: z.string(),
+    clinicalNotes: z.string().optional(),
+    patientSummary: z.unknown().optional()
+  })
+  .passthrough();
+const appointmentsResponseSchema = z.object({
+  appointments: z.array(appointmentResponseSchema)
+});
+const clinicalNotesResponseSchema = z.object({
+  notes: z.object({ clinicalNotes: z.string() }).passthrough()
+});
+const patientSummaryResponseSchema = z
+  .object({
+    _id: z.string(),
+    healthProfile: z.unknown().optional()
+  })
+  .passthrough();
+const patientsResponseSchema = z.object({
+  patients: z.array(patientSummaryResponseSchema)
+});
 
 const fakeDb = vi.hoisted(() => {
   type RecordData = Record<string, any> & { _id: string };
@@ -39,7 +72,10 @@ const fakeDb = vi.hoisted(() => {
     unverifiedUser: "000000000000000000000005",
     suspendedUser: "000000000000000000000006",
     appointment: "000000000000000000000003",
-    doctor: "000000000000000000000004"
+    doctor: "000000000000000000000004",
+    otherDoctor: "000000000000000000000009",
+    defaultOrg: "000000000000000000000007",
+    otherOrg: "000000000000000000000008"
   };
 
   let counter = 10;
@@ -48,6 +84,10 @@ const fakeDb = vi.hoisted(() => {
   const appointments = new Map<string, RecordData>();
   const sessions = new Map<string, RecordData>();
   const challenges = new Map<string, RecordData>();
+  const organizations = new Map<string, RecordData>();
+  const memberships = new Map<string, RecordData>();
+  const auditLogs = new Map<string, RecordData>();
+  const authSecurity = new Map<string, RecordData>();
 
   const makeId = () => counter.toString(16).padStart(24, "0");
 
@@ -57,6 +97,8 @@ const fakeDb = vi.hoisted(() => {
     public constructor(data: Record<string, any>) {
       Object.assign(this, data);
       this._id ??= makeId();
+      this.createdAt ??= new Date();
+      this.updatedAt ??= new Date();
       counter += 1;
     }
 
@@ -75,16 +117,20 @@ const fakeDb = vi.hoisted(() => {
     }
   }
 
-  const hasField = (doc: RecordData, key: string) => doc[key] !== undefined;
+  const getByPath = (doc: RecordData, key: string): any =>
+    key.split(".").reduce((value, part) => (value == null ? undefined : value[part]), doc);
+
+  const hasField = (doc: RecordData, key: string) => getByPath(doc, key) !== undefined;
 
   const valueMatches = (doc: RecordData, key: string, expected: any): boolean => {
+    const actual = getByPath(doc, key);
+
     if (expected && typeof expected === "object" && !Array.isArray(expected)) {
       if ("$exists" in expected) {
         return Boolean(expected.$exists) === hasField(doc, key);
       }
 
       if ("$gt" in expected) {
-        const actual = doc[key];
         const comparisonValue: unknown = expected.$gt;
 
         if (actual instanceof Date && comparisonValue instanceof Date) {
@@ -93,9 +139,28 @@ const fakeDb = vi.hoisted(() => {
 
         return Number(actual) > Number(comparisonValue);
       }
+
+      if ("$lt" in expected) {
+        const comparisonValue: unknown = expected.$lt;
+
+        if (actual instanceof Date && comparisonValue instanceof Date) {
+          return actual.getTime() < comparisonValue.getTime();
+        }
+
+        return Number(actual) < Number(comparisonValue);
+      }
+
+      if ("$ne" in expected) {
+        return actual !== expected.$ne;
+      }
+
+      if ("$in" in expected && Array.isArray(expected.$in)) {
+        const expectedValues = expected.$in as unknown[];
+        return expectedValues.includes(actual);
+      }
     }
 
-    return doc[key] === expected;
+    return actual === expected;
   };
 
   const matches = (doc: RecordData, filter: QueryFilter = {}) =>
@@ -134,21 +199,46 @@ const fakeDb = vi.hoisted(() => {
     return Array.isArray(value) ? value.map(stripOne) : stripOne(value);
   };
 
-  const sortByDateDesc = (value: any): any => {
+  const sortValue = (value: any, sortSpec: QueryFilter = { date: -1 }): any => {
     if (!Array.isArray(value)) {
       return value;
     }
 
-    return [...value].sort((a, b) => Number(b.date ?? 0) - Number(a.date ?? 0));
+    const [[field, direction]] = Object.entries(sortSpec);
+    return [...value].sort((a, b) => {
+      const left = getByPath(a, field);
+      const right = getByPath(b, field);
+      const leftValue = left instanceof Date ? left.getTime() : Number(left ?? 0);
+      const rightValue = right instanceof Date ? right.getTime() : Number(right ?? 0);
+      return Number(direction) < 0 ? rightValue - leftValue : leftValue - rightValue;
+    });
   };
 
-  const query = (value: any) => ({
-    select: (select: string) => Promise.resolve(stripSelectedFields(value, select)),
-    sort: () => Promise.resolve(sortByDateDesc(value)),
-    then: (resolve: (value: any) => unknown, reject: (reason?: any) => unknown) =>
-      Promise.resolve(value).then(resolve, reject),
-    catch: (reject: (reason?: any) => unknown) => Promise.resolve(value).catch(reject)
-  });
+  const query = (value: any) => {
+    let current = value;
+    const api = {
+      select: (select: string) => {
+        current = stripSelectedFields(current, select);
+        return api;
+      },
+      sort: (sortSpec: QueryFilter = { date: -1 }) => {
+        current = sortValue(current, sortSpec);
+        return api;
+      },
+      skip: (offset: number) => {
+        current = Array.isArray(current) ? current.slice(offset) : current;
+        return api;
+      },
+      limit: (limit: number) => {
+        current = Array.isArray(current) ? current.slice(0, limit) : current;
+        return api;
+      },
+      then: (resolve: (value: any) => unknown, reject: (reason?: any) => unknown) =>
+        Promise.resolve(current).then(resolve, reject),
+      catch: (reject: (reason?: any) => unknown) => Promise.resolve(current).catch(reject)
+    };
+    return api;
+  };
 
   const findOneAndUpdate = (
     store: Map<string, RecordData>,
@@ -259,8 +349,28 @@ const fakeDb = vi.hoisted(() => {
 
   class AppointmentModel extends FakeDocument {
     public override async save() {
+      this.status ??= this.cancelled ? "cancelled" : this.isCompleted ? "completed" : "scheduled";
+      const duplicate = [...appointments.values()].find(
+        (appointment) =>
+          appointment.docId === this.docId &&
+          appointment.slotDate === this.slotDate &&
+          appointment.slotTime === this.slotTime &&
+          appointment.status === "scheduled" &&
+          this.status === "scheduled"
+      );
+      if (duplicate) {
+        const error = new Error("duplicate key") as Error & { code: number };
+        error.code = 11000;
+        throw error;
+      }
       appointments.set(this._id, this as RecordData);
       return this;
+    }
+
+    public static findOne(filter: QueryFilter) {
+      return Promise.resolve(
+        [...appointments.values()].find((appointment) => matches(appointment, filter)) ?? null
+      );
     }
 
     public static findById(id: string) {
@@ -279,6 +389,14 @@ const fakeDb = vi.hoisted(() => {
       return query(
         [...appointments.values()].filter((appointment) => matches(appointment, filter))
       );
+    }
+
+    public static updateMany(filter: QueryFilter, update: QueryFilter) {
+      return updateMany(appointments, filter, update);
+    }
+
+    public static aggregate() {
+      return Promise.resolve([]);
     }
   }
 
@@ -300,6 +418,10 @@ const fakeDb = vi.hoisted(() => {
 
     public static updateMany(filter: QueryFilter, update: QueryFilter) {
       return updateMany(sessions, filter, update);
+    }
+
+    public static find(filter: QueryFilter = {}) {
+      return query([...sessions.values()].filter((session) => matches(session, filter)));
     }
   }
 
@@ -332,6 +454,79 @@ const fakeDb = vi.hoisted(() => {
     }
   }
 
+  class OrganizationModel extends FakeDocument {
+    public override async save() {
+      this.slug = String(this.slug).toLowerCase();
+      organizations.set(this._id, this as RecordData);
+      return this;
+    }
+
+    public static findOne(filter: QueryFilter) {
+      return Promise.resolve(
+        [...organizations.values()].find((organization) => matches(organization, filter)) ?? null
+      );
+    }
+
+    public static findById(id: string) {
+      return Promise.resolve(organizations.get(id) ?? null);
+    }
+
+    public static find(filter: QueryFilter = {}) {
+      return query(
+        [...organizations.values()].filter((organization) => matches(organization, filter))
+      );
+    }
+  }
+
+  class OrganizationMembershipModel extends FakeDocument {
+    public override async save() {
+      memberships.set(this._id, this as RecordData);
+      return this;
+    }
+
+    public static findOne(filter: QueryFilter) {
+      return Promise.resolve(
+        [...memberships.values()].find((membership) => matches(membership, filter)) ?? null
+      );
+    }
+
+    public static find(filter: QueryFilter = {}) {
+      return query([...memberships.values()].filter((membership) => matches(membership, filter)));
+    }
+
+    public static updateMany(filter: QueryFilter, update: QueryFilter) {
+      return updateMany(memberships, filter, update);
+    }
+
+    public static aggregate() {
+      return Promise.resolve([]);
+    }
+  }
+
+  class AuditLogModel extends FakeDocument {
+    public override async save() {
+      auditLogs.set(this._id, this as RecordData);
+      return this;
+    }
+
+    public static find(filter: QueryFilter = {}) {
+      return query([...auditLogs.values()].filter((auditLog) => matches(auditLog, filter)));
+    }
+  }
+
+  class AuthSecurityModel extends FakeDocument {
+    public override async save() {
+      authSecurity.set(`${this.accountType}:${this.accountId}`, this as RecordData);
+      return this;
+    }
+
+    public static findOne(filter: QueryFilter) {
+      return Promise.resolve(
+        [...authSecurity.values()].find((security) => matches(security, filter)) ?? null
+      );
+    }
+  }
+
   const patientPassword = "PatientPass12!";
   const doctorPassword = "DoctorPass12!";
 
@@ -341,7 +536,33 @@ const fakeDb = vi.hoisted(() => {
     appointments.clear();
     sessions.clear();
     challenges.clear();
+    organizations.clear();
+    memberships.clear();
+    auditLogs.clear();
+    authSecurity.clear();
     counter = 10;
+
+    organizations.set(
+      ids.defaultOrg,
+      new FakeDocument({
+        _id: ids.defaultOrg,
+        name: "Test Hospital",
+        slug: "test-hospital",
+        status: "ACTIVE",
+        settings: {}
+      }) as RecordData
+    );
+
+    organizations.set(
+      ids.otherOrg,
+      new FakeDocument({
+        _id: ids.otherOrg,
+        name: "Other Hospital",
+        slug: "other-hospital",
+        status: "ACTIVE",
+        settings: {}
+      }) as RecordData
+    );
 
     users.set(
       ids.user,
@@ -356,10 +577,20 @@ const fakeDb = vi.hoisted(() => {
         address: { line1: "Line 1", line2: "Line 2" },
         gender: "Male",
         dob: "2000-01-01",
+        healthProfile: {
+          bloodGroup: "Not known",
+          allergies: [],
+          chronicConditions: [],
+          medicalNotes: "",
+          emergencyContact: { name: "", relationship: "", phone: "" },
+          insurance: { provider: "", policyNumber: "", expiryDate: "" }
+        },
         emailVerified: true,
         accountStatus: "ACTIVE",
         failedLoginAttempts: 0,
-        authenticationProvider: "LOCAL"
+        authenticationProvider: "LOCAL",
+        role: "PATIENT",
+        organizationId: ids.defaultOrg
       }) as RecordData
     );
 
@@ -376,10 +607,20 @@ const fakeDb = vi.hoisted(() => {
         address: { line1: "Line 1", line2: "Line 2" },
         gender: "Female",
         dob: "2000-01-01",
+        healthProfile: {
+          bloodGroup: "A+",
+          allergies: ["Pollen"],
+          chronicConditions: [],
+          medicalNotes: "Private patient note",
+          emergencyContact: { name: "Contact", relationship: "Sibling", phone: "1234567890" },
+          insurance: { provider: "Provider", policyNumber: "POLICY", expiryDate: "2030-01-01" }
+        },
         emailVerified: true,
         accountStatus: "ACTIVE",
         failedLoginAttempts: 0,
-        authenticationProvider: "LOCAL"
+        authenticationProvider: "LOCAL",
+        role: "PATIENT",
+        organizationId: ids.defaultOrg
       }) as RecordData
     );
 
@@ -395,7 +636,9 @@ const fakeDb = vi.hoisted(() => {
         emailVerified: false,
         accountStatus: "PENDING_VERIFICATION",
         failedLoginAttempts: 0,
-        authenticationProvider: "LOCAL"
+        authenticationProvider: "LOCAL",
+        role: "PATIENT",
+        organizationId: ids.defaultOrg
       }) as RecordData
     );
 
@@ -411,7 +654,9 @@ const fakeDb = vi.hoisted(() => {
         emailVerified: true,
         accountStatus: "SUSPENDED",
         failedLoginAttempts: 0,
-        authenticationProvider: "LOCAL"
+        authenticationProvider: "LOCAL",
+        role: "PATIENT",
+        organizationId: ids.defaultOrg
       }) as RecordData
     );
 
@@ -431,12 +676,59 @@ const fakeDb = vi.hoisted(() => {
         available: true,
         fees: 500,
         slots_booked: {},
+        availability: {
+          enabled: true,
+          timezone: "Asia/Kolkata",
+          consultationDurationMinutes: 30,
+          weeklySchedule: [1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
+            dayOfWeek,
+            slots: ["10:00", "10:30", "11:00"]
+          }))
+        },
         address: { line1: "Clinic", line2: "City" },
         date: Date.now(),
         emailVerified: true,
         accountStatus: "ACTIVE",
         failedLoginAttempts: 0,
-        authenticationProvider: "LOCAL"
+        authenticationProvider: "LOCAL",
+        role: "DOCTOR",
+        organizationId: ids.defaultOrg
+      }) as RecordData
+    );
+
+    doctors.set(
+      ids.otherDoctor,
+      new FakeDocument({
+        _id: ids.otherDoctor,
+        name: "Doctor Two",
+        email: "doctor-two@example.com",
+        normalizedEmail: "doctor-two@example.com",
+        password: `hashed:${doctorPassword}`,
+        image: "image",
+        speciality: "Cardiology",
+        degree: "MD",
+        experience: "7 Years",
+        about: "About",
+        available: true,
+        fees: 700,
+        slots_booked: {},
+        availability: {
+          enabled: true,
+          timezone: "Asia/Kolkata",
+          consultationDurationMinutes: 30,
+          weeklySchedule: [1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
+            dayOfWeek,
+            slots: ["10:00", "10:30", "11:00"]
+          }))
+        },
+        address: { line1: "Clinic Two", line2: "City" },
+        date: Date.now(),
+        emailVerified: true,
+        accountStatus: "ACTIVE",
+        failedLoginAttempts: 0,
+        authenticationProvider: "LOCAL",
+        role: "DOCTOR",
+        organizationId: ids.defaultOrg
       }) as RecordData
     );
 
@@ -451,12 +743,40 @@ const fakeDb = vi.hoisted(() => {
         userData: {},
         docData: {},
         amount: 500,
+        organizationId: ids.defaultOrg,
         date: Date.now(),
         cancelled: false,
         payment: false,
-        isCompleted: false
+        isCompleted: false,
+        status: "scheduled"
       }) as RecordData
     );
+
+    const seedMembership = (
+      accountId: string,
+      accountType: "patient" | "doctor" | "admin",
+      role: "PATIENT" | "DOCTOR" | "HOSPITAL_ADMIN",
+      organizationId = ids.defaultOrg
+    ) => {
+      const membership = new FakeDocument({
+        organizationId,
+        accountId,
+        accountType,
+        role,
+        scopedPermissions: [],
+        status: "ACTIVE",
+        activatedAt: new Date()
+      }) as RecordData;
+      memberships.set(membership._id, membership);
+    };
+
+    seedMembership(ids.user, "patient", "PATIENT");
+    seedMembership(ids.otherUser, "patient", "PATIENT");
+    seedMembership(ids.unverifiedUser, "patient", "PATIENT");
+    seedMembership(ids.suspendedUser, "patient", "PATIENT");
+    seedMembership(ids.doctor, "doctor", "DOCTOR");
+    seedMembership(ids.otherDoctor, "doctor", "DOCTOR");
+    seedMembership("admin@example.com", "admin", "HOSPITAL_ADMIN");
   };
 
   return {
@@ -467,13 +787,21 @@ const fakeDb = vi.hoisted(() => {
     appointments,
     sessions,
     challenges,
+    organizations,
+    memberships,
+    auditLogs,
+    authSecurity,
     patientPassword,
     doctorPassword,
     UserModel,
     DoctorModel,
     AppointmentModel,
     AuthSessionModel,
-    AuthChallengeModel
+    AuthChallengeModel,
+    OrganizationModel,
+    OrganizationMembershipModel,
+    AuditLogModel,
+    AuthSecurityModel
   };
 });
 
@@ -482,6 +810,12 @@ vi.mock("../src/models/Doctor.js", () => ({ default: fakeDb.DoctorModel }));
 vi.mock("../src/models/Appointment.js", () => ({ default: fakeDb.AppointmentModel }));
 vi.mock("../src/models/AuthSession.js", () => ({ default: fakeDb.AuthSessionModel }));
 vi.mock("../src/models/AuthChallenge.js", () => ({ default: fakeDb.AuthChallengeModel }));
+vi.mock("../src/models/Organization.js", () => ({ default: fakeDb.OrganizationModel }));
+vi.mock("../src/models/OrganizationMembership.js", () => ({
+  default: fakeDb.OrganizationMembershipModel
+}));
+vi.mock("../src/models/AuditLog.js", () => ({ default: fakeDb.AuditLogModel }));
+vi.mock("../src/models/AuthSecurity.js", () => ({ default: fakeDb.AuthSecurityModel }));
 vi.mock("bcrypt", () => ({
   default: {
     hash: vi.fn(async (password: string) => `hashed:${password}`),
@@ -496,6 +830,23 @@ describe("MedFlow backend foundation and Phase 1B authentication", () => {
   const strongPassword = "NewPatient12!";
   const tokenFor = (id: string) =>
     jwt.sign({ id, role: "patient" }, process.env.JWT_SECRET as string, { expiresIn: "1d" });
+  const doctorTokenFor = (id: string) =>
+    jwt.sign({ id, role: "doctor" }, process.env.JWT_SECRET as string, { expiresIn: "1d" });
+  const adminToken = () =>
+    jwt.sign(
+      `${process.env.ADMIN_EMAIL as string}${process.env.ADMIN_PASSWORD as string}`,
+      process.env.JWT_SECRET as string
+    );
+  const nextAvailableDate = (): string => {
+    const date = new Date();
+    date.setDate(date.getDate() + 1);
+    if (date.getDay() === 0) date.setDate(date.getDate() + 1);
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0")
+    ].join("-");
+  };
 
   const latestPreviewToken = (purpose: "EMAIL_VERIFICATION" | "PASSWORD_RESET") => {
     const item = [...emailService.getDevelopmentEmailOutbox()]
@@ -517,6 +868,8 @@ describe("MedFlow backend foundation and Phase 1B authentication", () => {
     const cookie = response.headers["set-cookie"];
     return Array.isArray(cookie) ? cookie[0] : String(cookie);
   };
+
+  const secretFromOtpAuthUri = (uri: string) => new URL(uri).searchParams.get("secret") ?? "";
 
   beforeAll(async () => {
     app = (await import("../src/app.js")).default;
@@ -540,6 +893,50 @@ describe("MedFlow backend foundation and Phase 1B authentication", () => {
 
     expect(response.body.success).toBe(false);
     expect(response.body.data.database).toBe("disconnected");
+  });
+
+  it("assigns request IDs and returns them on errors", async () => {
+    const requestId = "phase-1d-request-id";
+    const response = await request(app)
+      .get("/api/user/get-profile")
+      .set("x-request-id", requestId)
+      .expect(401);
+
+    expect(response.headers["x-request-id"]).toBe(requestId);
+    expect(response.body.requestId).toBe(requestId);
+  });
+
+  it("serves a structurally valid OpenAPI document without real secrets", async () => {
+    const response = await request(app).get("/api-docs.json").expect(200);
+
+    expect(response.body.openapi).toMatch(/^3\./);
+    expect(response.body.info.title).toBe("MedFlow AI API");
+    expect(response.body.paths["/api/v1/auth/login"]).toBeTruthy();
+    expect(response.body.paths["/api/v1/auth/2fa/login/verify"]).toBeTruthy();
+    expect(response.body.components.securitySchemes.bearerAuth.scheme).toBe("bearer");
+    expect(JSON.stringify(response.body)).not.toContain("sk_live");
+    expect(JSON.stringify(response.body)).not.toContain("mongodb+srv://");
+  });
+
+  it("redacts sensitive values before operational logging", async () => {
+    const { redactSensitive } = await import("../src/utils/logger.js");
+    const redacted = redactSensitive({
+      email: "patient@example.test",
+      password: "Password12!",
+      nested: {
+        authorization: "Bearer secret",
+        recoveryCode: "AAAA-BBBB"
+      }
+    });
+
+    expect(redacted).toEqual({
+      email: "patient@example.test",
+      password: "[REDACTED]",
+      nested: {
+        authorization: "[REDACTED]",
+        recoveryCode: "[REDACTED]"
+      }
+    });
   });
 
   it("registers a patient safely and sends a verification challenge", async () => {
@@ -699,6 +1096,337 @@ describe("MedFlow backend foundation and Phase 1B authentication", () => {
       .expect(200);
 
     expect([...fakeDb.sessions.values()].filter((session) => !session.revokedAt)).toHaveLength(0);
+  });
+
+  it("enforces enterprise RBAC on admin and audit routes", async () => {
+    const patientLogin = await request(app)
+      .post("/api/user/login")
+      .send({ email: "patient@example.com", password: fakeDb.patientPassword })
+      .expect(200);
+
+    await request(app).get("/api/admin/dashboard").expect(401);
+    await request(app)
+      .get("/api/admin/dashboard")
+      .set("Authorization", `Bearer ${patientLogin.body.token}`)
+      .expect(401);
+    await request(app)
+      .get("/api/v1/audit-logs")
+      .set("Authorization", `Bearer ${patientLogin.body.token}`)
+      .expect(403);
+
+    const adminLogin = await request(app)
+      .post("/api/admin/login")
+      .send({ email: "admin@example.com", password: "Password123" })
+      .expect(200);
+
+    await request(app)
+      .get("/api/v1/audit-logs")
+      .set("Authorization", `Bearer ${adminLogin.body.token}`)
+      .expect(200);
+  });
+
+  it("blocks hospital-admin super-admin operations and self-role escalation", async () => {
+    const adminLogin = await request(app)
+      .post("/api/admin/login")
+      .send({ email: "admin@example.com", password: "Password123" })
+      .expect(200);
+
+    await request(app)
+      .post("/api/v1/organizations")
+      .set("Authorization", `Bearer ${adminLogin.body.token}`)
+      .send({ name: "New Hospital", slug: "new-hospital" })
+      .expect(403);
+
+    await request(app)
+      .put(`/api/v1/organizations/${fakeDb.ids.defaultOrg}/memberships`)
+      .set("Authorization", `Bearer ${adminLogin.body.token}`)
+      .send({
+        accountId: "admin@example.com",
+        accountType: "admin",
+        role: "SUPER_ADMIN",
+        scopedPermissions: [],
+        status: "ACTIVE"
+      })
+      .expect(403);
+  });
+
+  it("prevents cross-organization appointment access even for owned patient IDs", async () => {
+    fakeDb.appointments.get(fakeDb.ids.appointment)!.userId = fakeDb.ids.user;
+    fakeDb.appointments.get(fakeDb.ids.appointment)!.organizationId = fakeDb.ids.otherOrg;
+
+    const login = await request(app)
+      .post("/api/user/login")
+      .send({ email: "patient@example.com", password: fakeDb.patientPassword })
+      .expect(200);
+
+    await request(app)
+      .post("/api/user/cancel-appointment")
+      .set("Authorization", `Bearer ${login.body.token}`)
+      .set("x-organization-id", fakeDb.ids.otherOrg)
+      .send({ appointmentId: fakeDb.ids.appointment, organizationId: fakeDb.ids.otherOrg })
+      .expect(404);
+
+    expect(fakeDb.appointments.get(fakeDb.ids.appointment)?.cancelled).toBe(false);
+  });
+
+  it("uses maintained TOTP behavior with a small replay-protected clock window", async () => {
+    const { createOtpAuthUri, generateTotpCode, generateTotpSecret, verifyTotp } =
+      await import("../src/utils/totp.js");
+    const secret = generateTotpSecret();
+    const now = 1_700_000_015_000;
+    const currentCode = generateTotpCode(secret, now);
+    const previousCode = generateTotpCode(secret, now - 30_000);
+    const uri = createOtpAuthUri("MedFlow AI Enterprise", "patient@example.com", secret);
+
+    expect(secret).toBeTruthy();
+    expect(new URL(uri).searchParams.get("issuer")).toBe("MedFlow AI Enterprise");
+    await expect(verifyTotp(secret, currentCode, { now, window: 0 })).resolves.toMatchObject({
+      valid: true
+    });
+    await expect(verifyTotp(secret, previousCode, { now, window: 1 })).resolves.toMatchObject({
+      valid: true
+    });
+    await expect(verifyTotp(secret, previousCode, { now, window: 0 })).resolves.toMatchObject({
+      valid: false
+    });
+
+    const firstVerification = await verifyTotp(secret, currentCode, { now, window: 0 });
+    expect(firstVerification.valid).toBe(true);
+    await expect(
+      verifyTotp(secret, currentCode, {
+        now,
+        window: 1,
+        lastAcceptedStep: firstVerification.step
+      })
+    ).resolves.toMatchObject({ valid: false });
+  });
+
+  it("supports TOTP setup, two-step login, recovery codes, and challenge replay protection", async () => {
+    const { generateTotpCode } = await import("../src/utils/totp.js");
+    const firstLogin = await request(app)
+      .post("/api/user/login")
+      .send({ email: "patient@example.com", password: fakeDb.patientPassword })
+      .expect(200);
+
+    const expiredSetup = await request(app)
+      .post("/api/v1/auth/2fa/setup/begin")
+      .set("Authorization", `Bearer ${firstLogin.body.token}`)
+      .send({})
+      .expect(200);
+    const expiredSecret = secretFromOtpAuthUri(expiredSetup.body.data.setup.otpauthUri);
+    fakeDb.authSecurity.get(`patient:${fakeDb.ids.user}`)!.pendingSetupExpiresAt = new Date(
+      Date.now() - 1_000
+    );
+    await request(app)
+      .post("/api/v1/auth/2fa/setup/confirm")
+      .set("Authorization", `Bearer ${firstLogin.body.token}`)
+      .send({ totpCode: generateTotpCode(expiredSecret) })
+      .expect(400);
+
+    const setup = await request(app)
+      .post("/api/v1/auth/2fa/setup/begin")
+      .set("Authorization", `Bearer ${firstLogin.body.token}`)
+      .send({})
+      .expect(200);
+    const secret = secretFromOtpAuthUri(setup.body.data.setup.otpauthUri);
+    const setupUri = new URL(setup.body.data.setup.otpauthUri);
+
+    expect(setupUri.protocol).toBe("otpauth:");
+    expect(setupUri.searchParams.get("issuer")).toBe("MedFlow AI Enterprise");
+    expect(setup.body.data.setup.qrCodeDataUrl).toMatch(/^data:image\/png;base64,/);
+
+    await request(app)
+      .post("/api/v1/auth/2fa/setup/confirm")
+      .set("Authorization", `Bearer ${firstLogin.body.token}`)
+      .send({ totpCode: "000000" })
+      .expect(400);
+
+    const setupCode = generateTotpCode(secret);
+    const confirm = await request(app)
+      .post("/api/v1/auth/2fa/setup/confirm")
+      .set("Authorization", `Bearer ${firstLogin.body.token}`)
+      .send({ totpCode: setupCode })
+      .expect(200);
+
+    expect(confirm.body.data.recoveryCodes).toHaveLength(4);
+    const securityRecord = fakeDb.authSecurity.get(`patient:${fakeDb.ids.user}`)! as {
+      encryptedTotpSecret?: string;
+      recoveryCodes: Array<{ codeHash?: string }>;
+    };
+    expect(securityRecord.encryptedTotpSecret).toBeTruthy();
+    expect(JSON.stringify(securityRecord)).not.toContain(secret);
+    expect(JSON.stringify(securityRecord)).not.toContain(confirm.body.data.recoveryCodes[0]);
+    expect(securityRecord.recoveryCodes.every((code: { codeHash?: string }) => code.codeHash)).toBe(
+      true
+    );
+    expect(JSON.stringify([...fakeDb.auditLogs.values()])).not.toContain(secret);
+    expect(JSON.stringify(confirm.body.data)).not.toContain(secret);
+    expect(
+      [...fakeDb.sessions.values()].some((session) => session.revocationReason === "2fa-enabled")
+    ).toBe(true);
+
+    const primaryOnlyLogin = await request(app)
+      .post("/api/user/login")
+      .send({ email: "patient@example.com", password: fakeDb.patientPassword })
+      .expect(202);
+    expect(primaryOnlyLogin.body.data.requiresTwoFactor).toBe(true);
+    expect(primaryOnlyLogin.body.data.accessToken).toBeUndefined();
+
+    await request(app)
+      .get("/api/user/get-profile")
+      .set("Authorization", `Bearer ${primaryOnlyLogin.body.data.twoFactorToken}`)
+      .expect(401);
+
+    await request(app)
+      .post("/api/v1/auth/2fa/login/verify")
+      .send({ twoFactorToken: firstLogin.body.token, totpCode: generateTotpCode(secret) })
+      .expect(401);
+
+    await request(app)
+      .post("/api/v1/auth/2fa/login/verify")
+      .send({ twoFactorToken: primaryOnlyLogin.body.data.twoFactorToken, totpCode: "111111" })
+      .expect(401);
+
+    fakeDb.authSecurity.get(`patient:${fakeDb.ids.user}`)!.lastTotpStep = undefined;
+    const secondStepCode = generateTotpCode(secret);
+    const secondFactorLogin = await request(app)
+      .post("/api/v1/auth/2fa/login/verify")
+      .send({
+        twoFactorToken: primaryOnlyLogin.body.data.twoFactorToken,
+        totpCode: secondStepCode
+      })
+      .expect(200);
+
+    expect(secondFactorLogin.body.token).toBeTruthy();
+
+    await request(app)
+      .post("/api/v1/auth/2fa/login/verify")
+      .send({
+        twoFactorToken: primaryOnlyLogin.body.data.twoFactorToken,
+        totpCode: secondStepCode
+      })
+      .expect(401);
+
+    const expiredChallengeLogin = await request(app)
+      .post("/api/user/login")
+      .send({ email: "patient@example.com", password: fakeDb.patientPassword })
+      .expect(202);
+    [...fakeDb.challenges.values()]
+      .filter((challenge) => challenge.purpose === "LOGIN_VERIFICATION" && !challenge.consumedAt)
+      .forEach((challenge) => {
+        challenge.expiresAt = new Date(Date.now() - 1_000);
+      });
+    fakeDb.authSecurity.get(`patient:${fakeDb.ids.user}`)!.lastTotpStep = undefined;
+    await request(app)
+      .post("/api/v1/auth/2fa/login/verify")
+      .send({
+        twoFactorToken: expiredChallengeLogin.body.data.twoFactorToken,
+        totpCode: generateTotpCode(secret)
+      })
+      .expect(401);
+
+    const attemptLimitLogin = await request(app)
+      .post("/api/user/login")
+      .send({ email: "patient@example.com", password: fakeDb.patientPassword })
+      .expect(202);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await request(app)
+        .post("/api/v1/auth/2fa/login/verify")
+        .send({ twoFactorToken: attemptLimitLogin.body.data.twoFactorToken, totpCode: "222222" })
+        .expect(401);
+    }
+    expect(
+      [...fakeDb.challenges.values()].some(
+        (challenge) => challenge.purpose === "LOGIN_VERIFICATION" && challenge.revokedAt
+      )
+    ).toBe(true);
+
+    const recoveryLogin = await request(app)
+      .post("/api/user/login")
+      .send({ email: "patient@example.com", password: fakeDb.patientPassword })
+      .expect(202);
+    const recoveryCode = confirm.body.data.recoveryCodes[0];
+
+    await request(app)
+      .post("/api/v1/auth/2fa/login/verify")
+      .send({
+        twoFactorToken: recoveryLogin.body.data.twoFactorToken,
+        recoveryCode
+      })
+      .expect(200);
+
+    const recoveryReuseLogin = await request(app)
+      .post("/api/user/login")
+      .send({ email: "patient@example.com", password: fakeDb.patientPassword })
+      .expect(202);
+
+    await request(app)
+      .post("/api/v1/auth/2fa/login/verify")
+      .send({
+        twoFactorToken: recoveryReuseLogin.body.data.twoFactorToken,
+        recoveryCode
+      })
+      .expect(401);
+
+    fakeDb.authSecurity.get(`patient:${fakeDb.ids.user}`)!.lastTotpStep = undefined;
+    const disableCode = generateTotpCode(secret);
+    await request(app)
+      .post("/api/v1/auth/2fa/disable")
+      .set("Authorization", `Bearer ${secondFactorLogin.body.token}`)
+      .send({ password: fakeDb.patientPassword, totpCode: disableCode })
+      .expect(200);
+
+    expect(fakeDb.authSecurity.get(`patient:${fakeDb.ids.user}`)?.twoFactorEnabled).toBe(false);
+    expect(
+      [...fakeDb.sessions.values()].some((session) => session.revocationReason === "2fa-disabled")
+    ).toBe(true);
+    expect(
+      [...fakeDb.auditLogs.values()].some((auditLog) => auditLog.eventType === "auth.2fa.disabled")
+    ).toBe(true);
+    await request(app)
+      .post("/api/v1/auth/refresh")
+      .set("Cookie", cookieFrom(secondFactorLogin))
+      .send({})
+      .expect(401);
+  });
+
+  it("lists and revokes own sessions and blocks revoked refresh tokens", async () => {
+    const first = await request(app)
+      .post("/api/user/login")
+      .send({ email: "patient@example.com", password: fakeDb.patientPassword })
+      .expect(200);
+    await request(app)
+      .post("/api/user/login")
+      .send({ email: "patient@example.com", password: fakeDb.patientPassword })
+      .expect(200);
+
+    const sessions = await request(app)
+      .get("/api/v1/auth/sessions")
+      .set("Authorization", `Bearer ${first.body.token}`)
+      .expect(200);
+
+    const sessionList = sessions.body.data.sessions as Array<{ current: boolean }>;
+    expect(sessionList).toHaveLength(2);
+    expect(sessionList.filter((session) => session.current)).toHaveLength(1);
+
+    await request(app)
+      .post("/api/v1/auth/sessions/revoke-others")
+      .set("Authorization", `Bearer ${first.body.token}`)
+      .send({})
+      .expect(200);
+
+    expect([...fakeDb.sessions.values()].filter((session) => !session.revokedAt)).toHaveLength(1);
+
+    await request(app)
+      .delete(`/api/v1/auth/sessions/${first.body.data.sessionId}`)
+      .set("Authorization", `Bearer ${first.body.token}`)
+      .expect(200);
+
+    await request(app)
+      .post("/api/v1/auth/refresh")
+      .set("Cookie", cookieFrom(first))
+      .send({})
+      .expect(401);
   });
 
   it("verifies email tokens and rejects reuse", async () => {
@@ -891,6 +1619,249 @@ describe("MedFlow backend foundation and Phase 1B authentication", () => {
 
     expect(response.body.success).toBe(false);
     expect(response.body.message).toBe("Unauthorized action");
+  });
+
+  describe("Phase 2B healthcare core", () => {
+    const healthProfilePayload = {
+      dob: "1994-06-12",
+      gender: "Female",
+      bloodGroup: "O+",
+      allergies: ["Penicillin", "Pollen", "Penicillin"],
+      chronicConditions: ["Asthma"],
+      medicalNotes: "Uses an inhaler as prescribed.",
+      emergencyContact: {
+        name: "Sam Patient",
+        relationship: "Sibling",
+        phone: "+91 9876543210"
+      },
+      insurance: {
+        provider: "Test Health",
+        policyNumber: "TH-100",
+        expiryDate: "2030-12-31"
+      }
+    };
+
+    it("updates only the authenticated patient's validated health profile and audits it", async () => {
+      const response = await request(app)
+        .put("/api/user/health-profile")
+        .set("token", tokenFor(fakeDb.ids.user))
+        .send(healthProfilePayload)
+        .expect(200);
+
+      expect(response.body.healthProfile.bloodGroup).toBe("O+");
+      expect(response.body.healthProfile.allergies).toEqual(["Penicillin", "Pollen"]);
+      expect(fakeDb.users.get(fakeDb.ids.otherUser)?.healthProfile.bloodGroup).toBe("A+");
+      expect(
+        [...fakeDb.auditLogs.values()].some(
+          (entry) => entry.eventType === "patient.health_profile.updated"
+        )
+      ).toBe(true);
+    });
+
+    it("rejects invalid health-profile input and non-patient access", async () => {
+      await request(app)
+        .put("/api/user/health-profile")
+        .set("token", tokenFor(fakeDb.ids.user))
+        .send({ ...healthProfilePayload, dob: "not-a-date" })
+        .expect(400);
+
+      await request(app)
+        .get("/api/user/health-profile")
+        .set("aToken", adminToken())
+        .expect(401);
+    });
+
+    it("lets a doctor update only their own persisted availability", async () => {
+      const availability = {
+        enabled: true,
+        timezone: "Asia/Kolkata",
+        consultationDurationMinutes: 45,
+        weeklySchedule: [{ dayOfWeek: 1, slots: ["09:00", "09:45"] }],
+        doctorId: fakeDb.ids.otherDoctor
+      };
+
+      await request(app)
+        .put("/api/doctor/availability")
+        .set("dToken", doctorTokenFor(fakeDb.ids.doctor))
+        .send(availability)
+        .expect(200);
+
+      expect(fakeDb.doctors.get(fakeDb.ids.doctor)?.availability.consultationDurationMinutes).toBe(45);
+      expect(fakeDb.doctors.get(fakeDb.ids.otherDoctor)?.availability.consultationDurationMinutes).toBe(30);
+    });
+
+    it("books a persisted valid slot and rejects a duplicate active booking", async () => {
+      const slotDate = nextAvailableDate();
+      const payload = { docId: fakeDb.ids.doctor, slotDate, slotTime: "10:00" };
+
+      const first = await request(app)
+        .post("/api/user/book-appointment")
+        .set("token", tokenFor(fakeDb.ids.user))
+        .send(payload)
+        .expect(201);
+      expect(first.body.appointment.slotDate).toBe(slotDate);
+
+      const availableSlots = await request(app)
+        .get(`/api/doctor/${fakeDb.ids.doctor}/available-slots?from=${slotDate}&days=1`)
+        .expect(200);
+      expect(availableSlots.body.availability.days[0].slots).not.toContain("10:00");
+
+      await request(app)
+        .post("/api/user/book-appointment")
+        .set("token", tokenFor(fakeDb.ids.otherUser))
+        .send(payload)
+        .expect(409);
+
+      expect(
+        [...fakeDb.auditLogs.values()].some((entry) => entry.eventType === "appointment.booked")
+      ).toBe(true);
+    });
+
+    it("enforces patient cancellation status rules and creates an audit event", async () => {
+      const booking = await request(app)
+        .post("/api/user/book-appointment")
+        .set("token", tokenFor(fakeDb.ids.user))
+        .send({ docId: fakeDb.ids.doctor, slotDate: nextAvailableDate(), slotTime: "10:30" })
+        .expect(201);
+      const appointmentId = booking.body.appointment.appointmentId as string;
+
+      await request(app)
+        .post("/api/user/cancel-appointment")
+        .set("token", tokenFor(fakeDb.ids.user))
+        .send({ appointmentId })
+        .expect(200);
+      await request(app)
+        .post("/api/user/cancel-appointment")
+        .set("token", tokenFor(fakeDb.ids.user))
+        .send({ appointmentId })
+        .expect(409);
+
+      expect(fakeDb.appointments.get(appointmentId)?.status).toBe("cancelled");
+      expect(
+        [...fakeDb.auditLogs.values()].some(
+          (entry) => entry.eventType === "appointment.cancelled" && entry.target.id === appointmentId
+        )
+      ).toBe(true);
+    });
+
+    it("allows assigned-doctor private notes while denying other doctors and patient responses", async () => {
+      fakeDb.users.get(fakeDb.ids.user)!.healthProfile = {
+        bloodGroup: "AB-",
+        allergies: ["Latex"],
+        chronicConditions: ["Private condition"],
+        medicalNotes: "Private patient health detail",
+        emergencyContact: { name: "Private Contact", relationship: "Sibling", phone: "1234567890" },
+        insurance: { provider: "Private Insurer", policyNumber: "POLICY", expiryDate: "2030-01-01" }
+      };
+
+      const booking = await request(app)
+        .post("/api/user/book-appointment")
+        .set("token", tokenFor(fakeDb.ids.user))
+        .send({ docId: fakeDb.ids.doctor, slotDate: nextAvailableDate(), slotTime: "11:00" })
+        .expect(201);
+      const appointmentId = booking.body.appointment.appointmentId as string;
+
+      await request(app)
+        .patch(`/api/doctor/appointments/${appointmentId}/clinical-notes`)
+        .set("dToken", doctorTokenFor(fakeDb.ids.otherDoctor))
+        .send({ clinicalNotes: "Must not be written" })
+        .expect(404);
+
+      await request(app)
+        .patch(`/api/doctor/appointments/${appointmentId}/clinical-notes`)
+        .set("dToken", doctorTokenFor(fakeDb.ids.doctor))
+        .send({ clinicalNotes: "Private assigned-doctor note" })
+        .expect(200);
+
+      const doctorAppointments = await request(app)
+        .get("/api/doctor/appointments")
+        .set("dToken", doctorTokenFor(fakeDb.ids.doctor))
+        .expect(200);
+      const doctorView = appointmentsResponseSchema.parse(doctorAppointments.body).appointments.find(
+        (appointment: { _id: string }) => appointment._id === appointmentId
+      );
+      expect(doctorView.clinicalNotes).toBe("Private assigned-doctor note");
+      expect(doctorView.patientSummary).toBeUndefined();
+      expect(JSON.stringify(doctorView)).not.toContain("Private patient health detail");
+      expect(JSON.stringify(doctorView)).not.toContain("Latex");
+
+      const adminAppointments = await request(app)
+        .get("/api/admin/appointments")
+        .set("aToken", adminToken())
+        .expect(200);
+      const adminListView = appointmentsResponseSchema.parse(adminAppointments.body).appointments.find(
+        (appointment: { _id: string }) => appointment._id === appointmentId
+      );
+      expect(adminListView.clinicalNotes).toBeUndefined();
+
+      const adminNotes = await request(app)
+        .get(`/api/admin/appointments/${appointmentId}/clinical-notes`)
+        .set("aToken", adminToken())
+        .expect(200);
+      expect(clinicalNotesResponseSchema.parse(adminNotes.body).notes.clinicalNotes).toBe(
+        "Private assigned-doctor note"
+      );
+
+      const patientAppointments = await request(app)
+        .get("/api/user/appointments")
+        .set("token", tokenFor(fakeDb.ids.user))
+        .expect(200);
+      const patientView = appointmentsResponseSchema.parse(patientAppointments.body).appointments.find(
+        (appointment: { _id: string }) => appointment._id === appointmentId
+      );
+      expect(patientView.clinicalNotes).toBeUndefined();
+      expect(patientView.patientSummary).toBeUndefined();
+
+      await request(app)
+        .patch(`/api/doctor/appointments/${appointmentId}/clinical-notes`)
+        .set("token", tokenFor(fakeDb.ids.user))
+        .send({ clinicalNotes: "Patient write attempt" })
+        .expect(401);
+    });
+
+    it("lets the assigned doctor complete a scheduled appointment once", async () => {
+      const booking = await request(app)
+        .post("/api/user/book-appointment")
+        .set("token", tokenFor(fakeDb.ids.user))
+        .send({ docId: fakeDb.ids.doctor, slotDate: nextAvailableDate(), slotTime: "10:30" })
+        .expect(201);
+      const appointmentId = booking.body.appointment.appointmentId as string;
+
+      await request(app)
+        .post("/api/doctor/complete-appointment")
+        .set("dToken", doctorTokenFor(fakeDb.ids.doctor))
+        .send({ appointmentId })
+        .expect(200);
+      await request(app)
+        .post("/api/doctor/complete-appointment")
+        .set("dToken", doctorTokenFor(fakeDb.ids.doctor))
+        .send({ appointmentId })
+        .expect(409);
+      expect(fakeDb.appointments.get(appointmentId)?.status).toBe("completed");
+    });
+
+    it("returns tenant-scoped safe patient summaries to authorized admins", async () => {
+      fakeDb.users.get(fakeDb.ids.otherUser)!.organizationId = fakeDb.ids.otherOrg;
+
+      const response = await request(app)
+        .get("/api/admin/patients?search=patient&status=ALL")
+        .set("aToken", adminToken())
+        .expect(200);
+
+      const patients = patientsResponseSchema.parse(response.body).patients;
+      expect(patients.some((patient) => patient._id === fakeDb.ids.user)).toBe(true);
+      expect(patients.some((patient) => patient._id === fakeDb.ids.otherUser)).toBe(false);
+      expect(patients[0]?.healthProfile).toBeUndefined();
+
+      await request(app)
+        .get(`/api/admin/patients/${fakeDb.ids.otherUser}/appointments`)
+        .set("aToken", adminToken())
+        .expect(404);
+      await request(app)
+        .get("/api/admin/patients")
+        .set("token", tokenFor(fakeDb.ids.user))
+        .expect(401);
+    });
   });
 
   it("returns a consistent 404 response", async () => {

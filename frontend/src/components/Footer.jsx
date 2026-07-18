@@ -1,42 +1,39 @@
 import React from 'react'
-import { assets } from '../assets/assets'
+import BrandLogo from './BrandLogo'
 
 const Footer = () => {
   return (
-    <div className='md:mx-10'>
-      <div className='flex flex-col sm:grid grid-cols-[3fr_1fr_1fr] gap-14 my-10  mt-40 text-sm'>
+    <footer className='mt-16 border-t border-line bg-white'>
+      <div className='mf-page flex flex-col sm:grid grid-cols-[3fr_1fr_1fr] gap-12 py-12 text-sm'>
 
         <div>
-          <img className='mb-5 w-40' src={assets.logo} alt="" />
-          <p className='w-full md:w-2/3 text-gray-600 leading-6'>Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book.</p>
+          <BrandLogo />
+          <p className='mt-5 w-full md:w-2/3 text-slate-600 leading-6'>Appointments, account protection, and care coordination in one dependable healthcare experience.</p>
         </div>
 
         <div>
-          <p className='text-xl font-medium mb-5'>COMPANY</p>
-          <ul className='flex flex-col gap-2 text-gray-600'>
+          <p className='text-base font-semibold mb-5 text-ink'>EXPLORE</p>
+          <ul className='flex flex-col gap-2 text-slate-600'>
             <li>Home</li>
             <li>About us</li>
-            <li>Delivery</li>
-            <li>Privacy policy</li>
+            <li>Security</li>
+            <li>Privacy</li>
           </ul>
         </div>
 
         <div>
-          <p className='text-xl font-medium mb-5'>GET IN TOUCH</p>
-          <ul className='flex flex-col gap-2 text-gray-600'>
-            <li>+1-212-456-7890</li>
-            <li>prescripto@gmail.com</li>
+          <p className='text-base font-semibold mb-5 text-ink'>SUPPORT</p>
+          <ul className='flex flex-col gap-2 text-slate-600'>
+            <li>Care coordination</li>
+            <li>support@medflow.ai</li>
           </ul>
         </div>
 
       </div>
-
-      <div>
-        <hr />
-        <p className='py-5 text-sm text-center'>Copyright 2024 @ Prescripto.com - All Right Reserved.</p>
+      <div className='border-t border-line'>
+        <p className='mf-page py-5 text-sm text-center text-slate-500'>Copyright 2026 Mayank Tiwari. All rights reserved.</p>
       </div>
-
-    </div>
+    </footer>
   )
 }
 

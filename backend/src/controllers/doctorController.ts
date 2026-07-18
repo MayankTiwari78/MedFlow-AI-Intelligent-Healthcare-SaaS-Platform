@@ -5,15 +5,22 @@ import {
   changeDoctorAvailability,
   completeDoctorAppointment,
   getDoctorDashboard,
+  getOwnDoctorAvailability,
   getDoctorProfile,
   listDoctorAppointments,
   listPublicDoctors,
+  updateDoctorClinicalNotes,
+  updateOwnDoctorAvailability,
   updateDoctorProfile as updateDoctorProfileService
 } from "../services/doctorService.js";
+import { listDoctorAvailableSlots } from "../services/availabilityService.js";
+import { writeAuditLog } from "../services/auditService.js";
 import type { Address } from "../types/domain.js";
 import { AppError } from "../utils/AppError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { sendSuccess } from "../utils/response.js";
+import { auditContextFromRequest } from "../utils/requestAudit.js";
+import { updateDoctorAvailabilitySchema } from "../validators/doctorValidators.js";
 
 const requireDoctorId = (doctorId?: string): string => {
   if (!doctorId) {
@@ -24,19 +31,42 @@ const requireDoctorId = (doctorId?: string): string => {
 };
 
 export const appointmentsDoctor: RequestHandler = asyncHandler(async (req, res) => {
-  const appointments = await listDoctorAppointments(requireDoctorId(req.authDoctorId));
+  const appointments = await listDoctorAppointments(
+    requireDoctorId(req.authDoctorId),
+    req.authOrganizationId
+  );
   sendSuccess(res, 200, "Appointments loaded", { appointments }, { appointments });
 });
 
 export const appointmentCancel: RequestHandler = asyncHandler(async (req, res) => {
   const { appointmentId } = req.body as { appointmentId: string };
-  await cancelDoctorAppointment(requireDoctorId(req.authDoctorId), appointmentId);
+  await cancelDoctorAppointment(
+    requireDoctorId(req.authDoctorId),
+    appointmentId,
+    req.authOrganizationId
+  );
+  await writeAuditLog({
+    eventType: "appointment.cancelled",
+    ...auditContextFromRequest(req),
+    target: { type: "appointment", id: appointmentId },
+    metadata: { source: "doctor" }
+  });
   sendSuccess(res, 200, "Appointment Cancelled");
 });
 
 export const appointmentComplete: RequestHandler = asyncHandler(async (req, res) => {
   const { appointmentId } = req.body as { appointmentId: string };
-  await completeDoctorAppointment(requireDoctorId(req.authDoctorId), appointmentId);
+  await completeDoctorAppointment(
+    requireDoctorId(req.authDoctorId),
+    appointmentId,
+    req.authOrganizationId
+  );
+  await writeAuditLog({
+    eventType: "appointment.status_changed",
+    ...auditContextFromRequest(req),
+    target: { type: "appointment", id: appointmentId },
+    metadata: { status: "completed", source: "doctor" }
+  });
   sendSuccess(res, 200, "Appointment Completed");
 });
 
@@ -46,13 +76,76 @@ export const doctorList: RequestHandler = asyncHandler(async (_req, res) => {
 });
 
 export const changeAvailablity: RequestHandler = asyncHandler(async (req, res) => {
-  const docId = (req.body as { docId?: string }).docId ?? requireDoctorId(req.authDoctorId);
-  await changeDoctorAvailability(docId);
+  const docId = requireDoctorId(req.authDoctorId);
+  await changeDoctorAvailability(docId, req.authOrganizationId);
+  await writeAuditLog({
+    eventType: "doctor.availability.updated",
+    ...auditContextFromRequest(req),
+    target: { type: "doctor", id: docId },
+    metadata: { source: "legacy_toggle" }
+  });
   sendSuccess(res, 200, "Availablity Changed");
 });
 
+export const availableSlots: RequestHandler = asyncHandler(async (req, res) => {
+  const doctorId = req.params.doctorId as string;
+  const { from, days } = req.query as unknown as { from?: string; days: number };
+  const availability = await listDoctorAvailableSlots(doctorId, from, days);
+  sendSuccess(res, 200, "Available slots loaded", { availability }, { availability });
+});
+
+export const ownAvailability: RequestHandler = asyncHandler(async (req, res) => {
+  const availability = await getOwnDoctorAvailability(
+    requireDoctorId(req.authDoctorId),
+    req.authOrganizationId
+  );
+  sendSuccess(res, 200, "Availability loaded", { availability }, { availability });
+});
+
+export const updateOwnAvailability: RequestHandler = asyncHandler(async (req, res) => {
+  const doctorId = requireDoctorId(req.authDoctorId);
+  const payload = updateDoctorAvailabilitySchema.parse(req.body);
+  const availability = await updateOwnDoctorAvailability(
+    doctorId,
+    payload,
+    req.authOrganizationId
+  );
+  await writeAuditLog({
+    eventType: "doctor.availability.updated",
+    ...auditContextFromRequest(req),
+    target: { type: "doctor", id: doctorId },
+    metadata: {
+      enabled: availability.enabled,
+      timezone: availability.timezone,
+      consultationDurationMinutes: availability.consultationDurationMinutes,
+      activeDays: availability.weeklySchedule.filter((day) => day.slots.length > 0).length
+    }
+  });
+  sendSuccess(res, 200, "Availability updated", { availability }, { availability });
+});
+
+export const updateClinicalNotes: RequestHandler = asyncHandler(async (req, res) => {
+  const appointmentId = req.params.appointmentId as string;
+  const notes = await updateDoctorClinicalNotes(
+    requireDoctorId(req.authDoctorId),
+    appointmentId,
+    (req.body as { clinicalNotes: string }).clinicalNotes,
+    req.authOrganizationId
+  );
+  await writeAuditLog({
+    eventType: "appointment.clinical_notes.updated",
+    ...auditContextFromRequest(req),
+    target: { type: "appointment", id: appointmentId },
+    metadata: { action: "updated" }
+  });
+  sendSuccess(res, 200, "Clinical notes saved", { notes }, { notes });
+});
+
 export const doctorProfile: RequestHandler = asyncHandler(async (req, res) => {
-  const profileData = await getDoctorProfile(requireDoctorId(req.authDoctorId));
+  const profileData = await getDoctorProfile(
+    requireDoctorId(req.authDoctorId),
+    req.authOrganizationId
+  );
   sendSuccess(res, 200, "Profile loaded", { profileData }, { profileData });
 });
 
@@ -64,11 +157,18 @@ export const updateDoctorProfile: RequestHandler = asyncHandler(async (req, res)
     about?: string;
   };
 
-  await updateDoctorProfileService(requireDoctorId(req.authDoctorId), payload);
+  await updateDoctorProfileService(
+    requireDoctorId(req.authDoctorId),
+    payload,
+    req.authOrganizationId
+  );
   sendSuccess(res, 200, "Profile Updated");
 });
 
 export const doctorDashboard: RequestHandler = asyncHandler(async (req, res) => {
-  const dashData = await getDoctorDashboard(requireDoctorId(req.authDoctorId));
+  const dashData = await getDoctorDashboard(
+    requireDoctorId(req.authDoctorId),
+    req.authOrganizationId
+  );
   sendSuccess(res, 200, "Dashboard loaded", { dashData }, { dashData });
 });

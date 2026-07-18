@@ -1,5 +1,8 @@
 import type { JwtPayload } from "jsonwebtoken";
 
+import type { AccountType } from "../constants/auth.js";
+import type { EnterpriseRole, Permission } from "../constants/rbac.js";
+
 declare global {
   namespace Express {
     interface Request {
@@ -8,7 +11,13 @@ declare global {
       authDoctorId?: string;
       authAdminEmail?: string;
       authAccountId?: string;
-      authAccountType?: "patient" | "doctor" | "admin";
+      authAccountType?: AccountType;
+      authRole?: EnterpriseRole;
+      authPermissions?: Permission[];
+      authOrganizationId?: string;
+      authMembershipId?: string;
+      authSessionId?: string;
+      requestId?: string;
     }
   }
 }

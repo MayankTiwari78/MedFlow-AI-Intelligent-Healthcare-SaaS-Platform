@@ -15,8 +15,37 @@ export const bookAppointmentSchema = z.object({
   slotDate: z
     .string()
     .trim()
-    .regex(/^\d{1,2}_\d{1,2}_\d{4}$/, "Invalid slot date"),
-  slotTime: z.string().trim().min(1).max(20)
+    .regex(/^(?:\d{4}-\d{2}-\d{2}|\d{1,2}_\d{1,2}_\d{4})$/, "Invalid slot date"),
+  slotTime: z.string().trim().regex(/^\d{2}:\d{2}$/, "Invalid slot time")
+});
+
+const optionalDateSchema = z
+  .string()
+  .trim()
+  .refine((value) => value === "" || /^\d{4}-\d{2}-\d{2}$/.test(value), "Invalid date");
+
+const normalizedListSchema = z
+  .array(z.string().trim().min(1).max(120))
+  .max(30)
+  .transform((items) => [...new Set(items)]);
+
+export const updateHealthProfileSchema = z.object({
+  dob: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Date of birth is required"),
+  gender: z.enum(["Female", "Male", "Non-binary", "Prefer not to say", "Not Selected"]),
+  bloodGroup: z.enum(["Not known", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]),
+  allergies: normalizedListSchema,
+  chronicConditions: normalizedListSchema,
+  medicalNotes: z.string().trim().max(2000),
+  emergencyContact: z.object({
+    name: z.string().trim().max(120),
+    relationship: z.string().trim().max(80),
+    phone: z.string().trim().max(20)
+  }),
+  insurance: z.object({
+    provider: z.string().trim().max(160),
+    policyNumber: z.string().trim().max(120),
+    expiryDate: optionalDateSchema
+  })
 });
 
 export const cancelAppointmentSchema = appointmentIdBodySchema;

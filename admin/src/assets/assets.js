@@ -12,18 +12,20 @@ import appointments_icon from './appointments_icon.svg'
 import earning_icon from './earning_icon.svg'
 import patients_icon from './patients_icon.svg'
 
+const assetUrl = (asset) => typeof asset === 'string' ? asset : asset?.src
+
 export const assets = {
-    add_icon,
-    admin_logo,
-    appointment_icon,
-    cancel_icon,
-    doctor_icon,
-    upload_area,
-    home_icon,
-    patients_icon,
-    people_icon,
-    list_icon,
-    tick_icon,
-    appointments_icon,
-    earning_icon
+    add_icon: assetUrl(add_icon),
+    admin_logo: assetUrl(admin_logo),
+    appointment_icon: assetUrl(appointment_icon),
+    cancel_icon: assetUrl(cancel_icon),
+    doctor_icon: assetUrl(doctor_icon),
+    upload_area: assetUrl(upload_area),
+    home_icon: assetUrl(home_icon),
+    patients_icon: assetUrl(patients_icon),
+    people_icon: assetUrl(people_icon),
+    list_icon: assetUrl(list_icon),
+    tick_icon: assetUrl(tick_icon),
+    appointments_icon: assetUrl(appointments_icon),
+    earning_icon: assetUrl(earning_icon)
 }

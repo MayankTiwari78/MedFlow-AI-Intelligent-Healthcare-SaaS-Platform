@@ -37,51 +37,52 @@ import Gynecologist from './Gynecologist.svg'
 import Neurologist from './Neurologist.svg'
 import Pediatricians from './Pediatricians.svg'
 
+const assetUrl = (asset) => typeof asset === 'string' ? asset : asset?.src
 
 export const assets = {
-    appointment_img,
-    header_img,
-    group_profiles,
-    logo,
-    chats_icon,
-    verified_icon,
-    info_icon,
-    profile_pic,
-    arrow_icon,
-    contact_image,
-    about_image,
-    menu_icon,
-    cross_icon,
-    dropdown_icon,
-    upload_icon,
-    stripe_logo,
-    razorpay_logo
+    appointment_img: assetUrl(appointment_img),
+    header_img: assetUrl(header_img),
+    group_profiles: assetUrl(group_profiles),
+    logo: assetUrl(logo),
+    chats_icon: assetUrl(chats_icon),
+    verified_icon: assetUrl(verified_icon),
+    info_icon: assetUrl(info_icon),
+    profile_pic: assetUrl(profile_pic),
+    arrow_icon: assetUrl(arrow_icon),
+    contact_image: assetUrl(contact_image),
+    about_image: assetUrl(about_image),
+    menu_icon: assetUrl(menu_icon),
+    cross_icon: assetUrl(cross_icon),
+    dropdown_icon: assetUrl(dropdown_icon),
+    upload_icon: assetUrl(upload_icon),
+    stripe_logo: assetUrl(stripe_logo),
+    razorpay_logo: assetUrl(razorpay_logo)
 }
 
 export const specialityData = [
     {
         speciality: 'General physician',
-        image: General_physician
+        image: assetUrl(General_physician)
     },
     {
         speciality: 'Gynecologist',
-        image: Gynecologist
+        image: assetUrl(Gynecologist)
     },
     {
         speciality: 'Dermatologist',
-        image: Dermatologist
+        image: assetUrl(Dermatologist)
     },
     {
         speciality: 'Pediatricians',
-        image: Pediatricians
+        image: assetUrl(Pediatricians)
     },
     {
         speciality: 'Neurologist',
-        image: Neurologist
+        image: assetUrl(Neurologist)
     },
     {
         speciality: 'Gastroenterologist',
-        image: Gastroenterologist
+        image: assetUrl(Gastroenterologist)
     },
 ]
 
@@ -89,7 +90,7 @@ export const doctors = [
     {
         _id: 'doc1',
         name: 'Dr. Richard James',
-        image: doc1,
+        image: assetUrl(doc1),
         speciality: 'General physician',
         degree: 'MBBS',
         experience: '4 Years',
@@ -103,7 +104,7 @@ export const doctors = [
     {
         _id: 'doc2',
         name: 'Dr. Emily Larson',
-        image: doc2,
+        image: assetUrl(doc2),
         speciality: 'Gynecologist',
         degree: 'MBBS',
         experience: '3 Years',
@@ -117,7 +118,7 @@ export const doctors = [
     {
         _id: 'doc3',
         name: 'Dr. Sarah Patel',
-        image: doc3,
+        image: assetUrl(doc3),
         speciality: 'Dermatologist',
         degree: 'MBBS',
         experience: '1 Year',
@@ -131,7 +132,7 @@ export const doctors = [
     {
         _id: 'doc4',
         name: 'Dr. Christopher Lee',
-        image: doc4,
+        image: assetUrl(doc4),
         speciality: 'Pediatricians',
         degree: 'MBBS',
         experience: '2 Years',
@@ -145,7 +146,7 @@ export const doctors = [
     {
         _id: 'doc5',
         name: 'Dr. Jennifer Garcia',
-        image: doc5,
+        image: assetUrl(doc5),
         speciality: 'Neurologist',
         degree: 'MBBS',
         experience: '4 Years',
@@ -159,7 +160,7 @@ export const doctors = [
     {
         _id: 'doc6',
         name: 'Dr. Andrew Williams',
-        image: doc6,
+        image: assetUrl(doc6),
         speciality: 'Neurologist',
         degree: 'MBBS',
         experience: '4 Years',
@@ -173,7 +174,7 @@ export const doctors = [
     {
         _id: 'doc7',
         name: 'Dr. Christopher Davis',
-        image: doc7,
+        image: assetUrl(doc7),
         speciality: 'General physician',
         degree: 'MBBS',
         experience: '4 Years',
@@ -187,7 +188,7 @@ export const doctors = [
     {
         _id: 'doc8',
         name: 'Dr. Timothy White',
-        image: doc8,
+        image: assetUrl(doc8),
         speciality: 'Gynecologist',
         degree: 'MBBS',
         experience: '3 Years',
@@ -201,7 +202,7 @@ export const doctors = [
     {
         _id: 'doc9',
         name: 'Dr. Ava Mitchell',
-        image: doc9,
+        image: assetUrl(doc9),
         speciality: 'Dermatologist',
         degree: 'MBBS',
         experience: '1 Year',
@@ -215,7 +216,7 @@ export const doctors = [
     {
         _id: 'doc10',
         name: 'Dr. Jeffrey King',
-        image: doc10,
+        image: assetUrl(doc10),
         speciality: 'Pediatricians',
         degree: 'MBBS',
         experience: '2 Years',
@@ -229,7 +230,7 @@ export const doctors = [
     {
         _id: 'doc11',
         name: 'Dr. Zoe Kelly',
-        image: doc11,
+        image: assetUrl(doc11),
         speciality: 'Gastroenterologist',
         degree: 'MBBS',
         experience: '4 Years',
@@ -243,7 +244,7 @@ export const doctors = [
     {
         _id: 'doc12',
         name: 'Dr. Patrick Harris',
-        image: doc12,
+        image: assetUrl(doc12),
         speciality: 'Neurologist',
         degree: 'MBBS',
         experience: '4 Years',
@@ -257,7 +258,7 @@ export const doctors = [
     {
         _id: 'doc13',
         name: 'Dr. Chloe Evans',
-        image: doc13,
+        image: assetUrl(doc13),
         speciality: 'General physician',
         degree: 'MBBS',
         experience: '4 Years',
@@ -271,7 +272,7 @@ export const doctors = [
     {
         _id: 'doc14',
         name: 'Dr. Ryan Martinez',
-        image: doc14,
+        image: assetUrl(doc14),
         speciality: 'Gynecologist',
         degree: 'MBBS',
         experience: '3 Years',
@@ -285,7 +286,7 @@ export const doctors = [
     {
         _id: 'doc15',
         name: 'Dr. Amelia Hill',
-        image: doc15,
+        image: assetUrl(doc15),
         speciality: 'Dermatologist',
         degree: 'MBBS',
         experience: '1 Year',

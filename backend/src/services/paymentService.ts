@@ -19,9 +19,10 @@ type RazorpayOrder = {
 
 export const createRazorpayOrder = async (
   userId: string,
-  appointmentId: string
+  appointmentId: string,
+  organizationId?: string
 ): Promise<RazorpayOrder> => {
-  const appointment = await ensurePatientAppointment(userId, appointmentId);
+  const appointment = await ensurePatientAppointment(userId, appointmentId, organizationId);
 
   if (env.isTest) {
     const order = {
@@ -61,7 +62,8 @@ export const verifyRazorpayPayment = async (
   userId: string,
   orderId: string,
   paymentId: string,
-  signature: string
+  signature: string,
+  organizationId?: string
 ): Promise<void> => {
   if (!env.isTest && !validateRazorpaySignature(orderId, paymentId, signature)) {
     throw new AppError("Payment verification failed", 400);
@@ -79,7 +81,7 @@ export const verifyRazorpayPayment = async (
     throw new AppError("Payment receipt missing", 400);
   }
 
-  const appointment = await ensurePatientAppointment(userId, orderInfo.receipt);
+  const appointment = await ensurePatientAppointment(userId, orderInfo.receipt, organizationId);
 
   if (appointment.razorpayOrderId && appointment.razorpayOrderId !== orderId) {
     throw new AppError("Payment order does not match appointment", 400);
@@ -95,9 +97,10 @@ export const verifyRazorpayPayment = async (
 export const createStripeCheckoutSession = async (
   userId: string,
   appointmentId: string,
-  origin?: string
+  origin?: string,
+  organizationId?: string
 ): Promise<string> => {
-  const appointment = await ensurePatientAppointment(userId, appointmentId);
+  const appointment = await ensurePatientAppointment(userId, appointmentId, organizationId);
   const safeOrigin = origin && /^https?:\/\//i.test(origin) ? origin : env.CLIENT_URL;
 
   if (env.isTest) {
@@ -138,9 +141,10 @@ export const createStripeCheckoutSession = async (
 export const verifyStripePayment = async (
   userId: string,
   appointmentId: string,
-  sessionId?: string
+  sessionId?: string,
+  organizationId?: string
 ): Promise<void> => {
-  const appointment = await ensurePatientAppointment(userId, appointmentId);
+  const appointment = await ensurePatientAppointment(userId, appointmentId, organizationId);
 
   if (!sessionId) {
     throw new AppError(

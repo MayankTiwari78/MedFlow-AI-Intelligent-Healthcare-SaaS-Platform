@@ -6,18 +6,23 @@ let setPatientToken = () => {}
 let refreshPromise = null
 
 const patientTokenKey = 'token'
+const inBrowser = () => typeof window !== 'undefined'
 
 const authEndpoint = (url = '') => url.includes('/api/v1/auth/')
 
 const patientEndpoint = (url = '') => url.includes('/api/user/') && !url.endsWith('/login') && !url.endsWith('/register')
 
 const persistToken = (token) => {
-  localStorage.setItem(patientTokenKey, token)
+  if (inBrowser()) {
+    window.localStorage.setItem(patientTokenKey, token)
+  }
   setPatientToken(token)
 }
 
 const clearToken = () => {
-  localStorage.removeItem(patientTokenKey)
+  if (inBrowser()) {
+    window.localStorage.removeItem(patientTokenKey)
+  }
   setPatientToken('')
 }
 
@@ -62,7 +67,7 @@ export const configurePatientAuth = ({ backendUrl, setToken }) => {
     config.withCredentials = true
 
     const url = String(config.url || '')
-    const token = localStorage.getItem(patientTokenKey)
+    const token = inBrowser() ? window.localStorage.getItem(patientTokenKey) : null
 
     if (token && patientEndpoint(url)) {
       config.headers = {
