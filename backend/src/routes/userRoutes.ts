@@ -12,7 +12,7 @@ import {
   verifyRazorpay,
   verifyStripe
 } from "../controllers/userController.js";
-import { authRateLimiter } from "../middleware/security.js";
+import { authRateLimiter, registrationRateLimiter } from "../middleware/security.js";
 import { authUser } from "../middleware/auth.js";
 import upload from "../middleware/upload.js";
 import { validateRequest } from "../middleware/validateRequest.js";
@@ -30,7 +30,7 @@ const userRouter = Router();
 
 userRouter.post(
   "/register",
-  authRateLimiter,
+  registrationRateLimiter,
   validateRequest({ body: registerUserSchema }),
   registerUser
 );

@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { PASSWORD_POLICY_MESSAGE } from "../constants/auth.js";
 import { isValidObjectId } from "../utils/objectId.js";
 
 export const objectIdSchema = z
@@ -13,7 +14,13 @@ export const emailSchema = z
   .email("Please enter a valid email")
   .transform((value) => value.toLowerCase());
 
-export const passwordSchema = z.string().min(8, "Please enter a strong password");
+export const passwordSchema = z
+  .string()
+  .min(12, PASSWORD_POLICY_MESSAGE)
+  .regex(/[a-z]/, PASSWORD_POLICY_MESSAGE)
+  .regex(/[A-Z]/, PASSWORD_POLICY_MESSAGE)
+  .regex(/\d/, PASSWORD_POLICY_MESSAGE)
+  .regex(/[^A-Za-z0-9]/, PASSWORD_POLICY_MESSAGE);
 
 export const addressSchema = z.object({
   line1: z.string().trim().max(200).default(""),

@@ -1,17 +1,32 @@
 import mongoose, { type HydratedDocument, type Model } from "mongoose";
 
+import {
+  ACCOUNT_STATUSES,
+  AUTHENTICATION_PROVIDERS,
+  type AccountStatus,
+  type AuthenticationProvider
+} from "../constants/auth.js";
 import { DEFAULT_USER_IMAGE } from "../constants/defaults.js";
 import type { Address } from "../types/domain.js";
 
 export interface User {
   name: string;
   email: string;
+  normalizedEmail: string;
   image: string;
   phone: string;
   address: Address;
   gender: string;
   dob: string;
   password: string;
+  emailVerified: boolean;
+  emailVerifiedAt?: Date;
+  accountStatus: AccountStatus;
+  failedLoginAttempts: number;
+  lockedUntil?: Date;
+  passwordChangedAt?: Date;
+  lastLoginAt?: Date;
+  authenticationProvider: AuthenticationProvider;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -30,15 +45,40 @@ const userSchema = new mongoose.Schema<User>(
   {
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    normalizedEmail: { type: String, required: true, lowercase: true, trim: true, index: true },
     image: { type: String, default: DEFAULT_USER_IMAGE },
     phone: { type: String, default: "000000000" },
     address: { type: addressSchema, default: () => ({ line1: "", line2: "" }) },
     gender: { type: String, default: "Not Selected" },
     dob: { type: String, default: "Not Selected" },
-    password: { type: String, required: true }
+    password: { type: String, required: true },
+    emailVerified: { type: Boolean, default: true },
+    emailVerifiedAt: { type: Date },
+    accountStatus: {
+      type: String,
+      enum: ACCOUNT_STATUSES,
+      default: "ACTIVE",
+      index: true
+    },
+    failedLoginAttempts: { type: Number, default: 0 },
+    lockedUntil: { type: Date },
+    passwordChangedAt: { type: Date },
+    lastLoginAt: { type: Date },
+    authenticationProvider: {
+      type: String,
+      enum: AUTHENTICATION_PROVIDERS,
+      default: "LOCAL"
+    }
   },
   { timestamps: true }
 );
+
+userSchema.pre("validate", function normalizeUserEmail() {
+  if (this.email) {
+    this.email = this.email.trim().toLowerCase();
+    this.normalizedEmail = this.email;
+  }
+});
 
 const UserModel =
   (mongoose.models.user as Model<User> | undefined) ?? mongoose.model<User>("user", userSchema);

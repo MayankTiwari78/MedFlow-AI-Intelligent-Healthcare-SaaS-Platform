@@ -1,17 +1,20 @@
-import React, { useContext } from 'react'
+import { useContext } from 'react'
 import { assets } from '../assets/assets'
 import { DoctorContext } from '../context/DoctorContext'
 import { AdminContext } from '../context/AdminContext'
 import { useNavigate } from 'react-router-dom'
+import { logoutAdminSession } from '../api/authClient'
 
 const Navbar = () => {
 
   const { dToken, setDToken } = useContext(DoctorContext)
   const { aToken, setAToken } = useContext(AdminContext)
+  const backendUrl = import.meta.env.VITE_BACKEND_URL
 
   const navigate = useNavigate()
 
-  const logout = () => {
+  const logout = async () => {
+    await logoutAdminSession(backendUrl)
     navigate('/')
     dToken && setDToken('')
     dToken && localStorage.removeItem('dToken')

@@ -1,6 +1,7 @@
 import axios from "axios";
-import { createContext, useState } from "react";
+import { createContext, useEffect, useState } from "react";
 import { toast } from "react-toastify";
+import { configureAdminAuth } from "../api/authClient";
 
 
 export const AdminContext = createContext()
@@ -14,6 +15,10 @@ const AdminContextProvider = (props) => {
     const [appointments, setAppointments] = useState([])
     const [doctors, setDoctors] = useState([])
     const [dashData, setDashData] = useState(false)
+
+    useEffect(() => {
+        configureAdminAuth({ backendUrl, setAToken })
+    }, [backendUrl])
 
     // Getting all Doctors data from Database using API
     const getAllDoctors = async () => {

@@ -1,6 +1,7 @@
 import { createContext, useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import axios from 'axios'
+import { configurePatientAuth } from "../api/authClient";
 
 export const AppContext = createContext()
 
@@ -12,6 +13,10 @@ const AppContextProvider = (props) => {
     const [doctors, setDoctors] = useState([])
     const [token, setToken] = useState(localStorage.getItem('token') ? localStorage.getItem('token') : '')
     const [userData, setUserData] = useState(false)
+
+    useEffect(() => {
+        configurePatientAuth({ backendUrl, setToken })
+    }, [backendUrl])
 
     // Getting Doctors using API
     const getDoctosData = async () => {

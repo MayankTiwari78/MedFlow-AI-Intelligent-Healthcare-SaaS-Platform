@@ -1,10 +1,12 @@
 import bcrypt from "bcrypt";
 
+import { env } from "../config/env.js";
 import AppointmentModel from "../models/Appointment.js";
 import DoctorModel from "../models/Doctor.js";
 import UserModel from "../models/User.js";
 import type { Address } from "../types/domain.js";
 import { AppError } from "../utils/AppError.js";
+import { normalizeEmail } from "../utils/authCrypto.js";
 import { removeSensitiveFields } from "../utils/sanitize.js";
 import { releaseAppointmentSlot } from "./userService.js";
 import { uploadImageToCloudinary } from "./uploadService.js";
@@ -42,19 +44,29 @@ export const createDoctor = async (
     throw new AppError("Image Not Selected", 400);
   }
 
-  const existingDoctor = await DoctorModel.findOne({ email: payload.email });
+  const normalizedEmail = normalizeEmail(payload.email);
+  const [existingDoctor, existingPatient] = await Promise.all([
+    DoctorModel.findOne({ email: normalizedEmail }),
+    UserModel.findOne({ email: normalizedEmail })
+  ]);
 
-  if (existingDoctor) {
+  if (existingDoctor || existingPatient || normalizedEmail === normalizeEmail(env.ADMIN_EMAIL)) {
     throw new AppError("email already exists", 409);
   }
 
-  const hashedPassword = await bcrypt.hash(payload.password, 10);
+  const hashedPassword = await bcrypt.hash(payload.password, 12);
   const image = await uploadImageToCloudinary(file.path);
 
   await new DoctorModel({
     ...payload,
+    email: normalizedEmail,
+    normalizedEmail,
     image,
     password: hashedPassword,
+    emailVerified: true,
+    accountStatus: "ACTIVE",
+    failedLoginAttempts: 0,
+    authenticationProvider: "LOCAL",
     date: Date.now()
   }).save();
 };

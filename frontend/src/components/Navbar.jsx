@@ -1,18 +1,19 @@
-import React, { useContext, useState } from 'react'
+import { useContext, useState } from 'react'
 import { assets } from '../assets/assets'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { AppContext } from '../context/AppContext'
+import { logoutPatientSession } from '../api/authClient'
 
 const Navbar = () => {
 
   const navigate = useNavigate()
 
   const [showMenu, setShowMenu] = useState(false)
-  const { token, setToken, userData } = useContext(AppContext)
+  const { token, setToken, userData, backendUrl } = useContext(AppContext)
 
-  const logout = () => {
-    localStorage.removeItem('token')
-    setToken(false)
+  const logout = async () => {
+    await logoutPatientSession(backendUrl)
+    setToken('')
     navigate('/login')
   }
 

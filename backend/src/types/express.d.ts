@@ -7,6 +7,8 @@ declare global {
       authUserId?: string;
       authDoctorId?: string;
       authAdminEmail?: string;
+      authAccountId?: string;
+      authAccountType?: "patient" | "doctor" | "admin";
     }
   }
 }
