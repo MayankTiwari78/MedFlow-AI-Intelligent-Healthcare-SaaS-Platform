@@ -13,6 +13,10 @@ import {
 } from "../services/adminService.js";
 import { writeAuditLog } from "../services/auditService.js";
 import { changeDoctorAvailability } from "../services/doctorService.js";
+import {
+  listAdminMedicalRecords,
+  type MedicalRecordQuery
+} from "../services/medicalRecordService.js";
 import type { Address } from "../types/domain.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { sendSuccess } from "../utils/response.js";
@@ -107,4 +111,12 @@ export const appointmentClinicalNotesAdmin: RequestHandler = asyncHandler(async 
     req.authOrganizationId
   );
   sendSuccess(res, 200, "Clinical notes loaded", { notes }, { notes });
+});
+
+export const medicalRecordsAdmin: RequestHandler = asyncHandler(async (req, res) => {
+  const records = await listAdminMedicalRecords(
+    req.query as unknown as MedicalRecordQuery,
+    req.authOrganizationId
+  );
+  sendSuccess(res, 200, "Medical records loaded", { records }, { records });
 });

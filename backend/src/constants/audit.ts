@@ -33,6 +33,12 @@ export const AUDIT_EVENT_TYPES = [
   "appointment.cancelled",
   "appointment.status_changed",
   "appointment.clinical_notes.updated",
+  "medical_record.created",
+  "medical_record.updated",
+  "medical_record.finalized",
+  "family_member.created",
+  "family_member.removed",
+  "health_card.viewed",
   "admin.sensitive_action",
   "security.cross_tenant_denied"
 ] as const;

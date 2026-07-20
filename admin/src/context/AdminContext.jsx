@@ -4,7 +4,7 @@ import axios from "axios";
 import { createContext, useCallback, useEffect, useState } from "react";
 import { toast } from "react-toastify";
 
-import { configureAdminAuth } from "../api/authClient";
+import { configureAdminAuth, isAuthSessionHandledError } from "../api/authClient";
 import { publicEnv } from "../lib/env";
 
 export const AdminContext = createContext();
@@ -29,7 +29,7 @@ const AdminContextProvider = ({ children }) => {
       if (data.success) setDoctors(data.doctors);
       else toast.error(data.message);
     } catch (error) {
-      toast.error(error.response?.data?.message || error.message || "Unable to load doctors");
+      if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message || "Unable to load doctors");
     }
   }, [aToken, backendUrl]);
 
@@ -46,7 +46,7 @@ const AdminContextProvider = ({ children }) => {
           await getAllDoctors();
         } else toast.error(data.message);
       } catch (error) {
-        toast.error(error.response?.data?.message || error.message || "Unable to update availability");
+        if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message || "Unable to update availability");
       }
     },
     [aToken, backendUrl, getAllDoctors]
@@ -58,7 +58,7 @@ const AdminContextProvider = ({ children }) => {
       if (data.success) setAppointments(data.appointments.reverse());
       else toast.error(data.message);
     } catch (error) {
-      toast.error(error.response?.data?.message || error.message || "Unable to load appointments");
+      if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message || "Unable to load appointments");
     }
   }, [aToken, backendUrl]);
 
@@ -75,7 +75,7 @@ const AdminContextProvider = ({ children }) => {
           await getAllAppointments();
         } else toast.error(data.message);
       } catch (error) {
-        toast.error(error.response?.data?.message || error.message || "Unable to cancel appointment");
+        if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message || "Unable to cancel appointment");
       }
     },
     [aToken, backendUrl, getAllAppointments]
@@ -87,7 +87,7 @@ const AdminContextProvider = ({ children }) => {
       if (data.success) setDashData(data.dashData);
       else toast.error(data.message);
     } catch (error) {
-      toast.error(error.response?.data?.message || error.message || "Unable to load dashboard");
+      if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message || "Unable to load dashboard");
     }
   }, [aToken, backendUrl]);
 

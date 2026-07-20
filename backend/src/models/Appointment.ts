@@ -20,6 +20,8 @@ export interface Appointment {
   stripeSessionId?: string;
   razorpayOrderId?: string;
   organizationId?: string;
+  demoSeedKey?: string;
+  demoDataLabel?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -49,7 +51,9 @@ const appointmentSchema = new mongoose.Schema<Appointment>(
     clinicalNotesUpdatedAt: { type: Date },
     stripeSessionId: { type: String },
     razorpayOrderId: { type: String },
-    organizationId: { type: String, index: true }
+    organizationId: { type: String, index: true },
+    demoSeedKey: { type: String, index: true },
+    demoDataLabel: { type: String }
   },
   { timestamps: true }
 );

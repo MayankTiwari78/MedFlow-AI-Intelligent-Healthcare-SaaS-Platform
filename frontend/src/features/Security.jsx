@@ -2,12 +2,14 @@ import axios from 'axios'
 import { useCallback, useContext, useEffect, useState } from 'react'
 import { toast } from 'react-toastify'
 import { AppContext } from '../context/AppContext'
-import AccessPrompt from '../components/AccessPrompt'
+import { isAuthSessionHandledError } from '../api/authClient'
+import { useProtectedPatientRoute } from '../hooks/useProtectedPatientRoute'
 
 const authHeader = (token) => ({ Authorization: `Bearer ${token}` })
 
 const Security = () => {
-  const { backendUrl, token, setToken } = useContext(AppContext)
+  const { authStatus, backendUrl, token, setToken } = useContext(AppContext)
+  useProtectedPatientRoute({ authStatus, token })
   const [status, setStatus] = useState(null)
   const [setup, setSetup] = useState(null)
   const [totpCode, setTotpCode] = useState('')
@@ -28,7 +30,11 @@ const Security = () => {
   }, [backendUrl, token])
 
   useEffect(() => {
-    loadSecurity().catch((error) => toast.error(error.response?.data?.message || error.message))
+    loadSecurity().catch((error) => {
+      if (!isAuthSessionHandledError(error)) {
+        toast.error(error.response?.data?.message || error.message)
+      }
+    })
   }, [loadSecurity])
 
   const beginSetup = async () => {
@@ -38,7 +44,7 @@ const Security = () => {
       setSetup(data.data.setup)
       toast.success(data.message)
     } catch (error) {
-      toast.error(error.response?.data?.message || error.message)
+      if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message)
     } finally {
       setLoading(false)
     }
@@ -54,7 +60,7 @@ const Security = () => {
       await loadSecurity()
       toast.success(data.message)
     } catch (error) {
-      toast.error(error.response?.data?.message || error.message)
+      if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message)
     } finally {
       setLoading(false)
     }
@@ -68,7 +74,7 @@ const Security = () => {
       setToken('')
       toast.success('Two-factor authentication disabled. Please log in again.')
     } catch (error) {
-      toast.error(error.response?.data?.message || error.message)
+      if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message)
     } finally {
       setLoading(false)
     }
@@ -83,24 +89,36 @@ const Security = () => {
       setToken('')
       toast.success('Recovery codes regenerated. Please log in again.')
     } catch (error) {
-      toast.error(error.response?.data?.message || error.message)
+      if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message)
     } finally {
       setLoading(false)
     }
   }
 
   const revokeSession = async (sessionId) => {
-    await axios.delete(backendUrl + `/api/v1/auth/sessions/${sessionId}`, { headers: authHeader(token), withCredentials: true })
-    await loadSecurity()
+    try {
+      await axios.delete(backendUrl + `/api/v1/auth/sessions/${sessionId}`, { headers: authHeader(token), withCredentials: true })
+      await loadSecurity()
+    } catch (error) {
+      if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message)
+    }
   }
 
   const revokeOthers = async () => {
-    await axios.post(backendUrl + '/api/v1/auth/sessions/revoke-others', {}, { headers: authHeader(token), withCredentials: true })
-    await loadSecurity()
+    try {
+      await axios.post(backendUrl + '/api/v1/auth/sessions/revoke-others', {}, { headers: authHeader(token), withCredentials: true })
+      await loadSecurity()
+    } catch (error) {
+      if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message)
+    }
+  }
+
+  if (authStatus === 'initializing') {
+    return <div className='max-w-4xl mx-auto py-10 space-y-7'><div className='h-28 animate-pulse rounded-lg bg-[#E7F4F5]' /><div className='h-72 animate-pulse rounded-lg bg-white' /></div>
   }
 
   if (!token) {
-    return <AccessPrompt title='Sign in to manage account security' description='Two-factor authentication, recovery codes, and active sessions are available only after secure sign-in.' />
+    return <div className='max-w-4xl mx-auto py-10 space-y-7'><div className='h-28 animate-pulse rounded-lg bg-[#E7F4F5]' /><div className='h-72 animate-pulse rounded-lg bg-white' /></div>
   }
 
   return (

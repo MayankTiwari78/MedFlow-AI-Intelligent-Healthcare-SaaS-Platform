@@ -5,6 +5,7 @@ import { AdminContext } from '../context/AdminContext'
 import { toast } from 'react-toastify'
 import { publicEnv } from '../lib/env'
 import BrandLogo from '../components/BrandLogo'
+import { resetPortalSessionExpiredNotification } from '../api/authClient'
 
 const Login = () => {
 
@@ -23,6 +24,7 @@ const Login = () => {
   const { setAToken } = useContext(AdminContext)
 
   const persistLogin = (role, data) => {
+    resetPortalSessionExpiredNotification()
     if (role === 'Admin') {
       setAToken(data.token)
       window.localStorage.setItem('aToken', data.token)

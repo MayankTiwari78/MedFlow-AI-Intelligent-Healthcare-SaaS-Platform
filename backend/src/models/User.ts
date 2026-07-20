@@ -31,6 +31,8 @@ export interface User {
   passwordChangedAt?: Date;
   lastLoginAt?: Date;
   authenticationProvider: AuthenticationProvider;
+  demoSeedKey?: string;
+  demoDataLabel?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -96,7 +98,9 @@ const userSchema = new mongoose.Schema<User>(
       type: String,
       enum: AUTHENTICATION_PROVIDERS,
       default: "LOCAL"
-    }
+    },
+    demoSeedKey: { type: String, index: true },
+    demoDataLabel: { type: String }
   },
   { timestamps: true }
 );

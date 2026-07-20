@@ -4,6 +4,8 @@ import { useNavigate } from '../lib/routerCompat'
 import { toast } from 'react-toastify'
 import { AppContext } from '../context/AppContext'
 import AuthShell from '../components/AuthShell'
+import { resetSessionExpiredNotification } from '../api/authClient'
+import { safeLoginDestination } from '../lib/authNavigation'
 
 const TwoFactorLogin = () => {
   const navigate = useNavigate()
@@ -35,10 +37,10 @@ const TwoFactorLogin = () => {
       )
 
       if (data.success) {
-        localStorage.setItem('token', data.token)
+        resetSessionExpiredNotification()
         setToken(data.token)
         sessionStorage.removeItem('patientTwoFactorChallenge')
-        navigate('/')
+        navigate(safeLoginDestination(challenge.returnTo))
       } else {
         toast.error(data.message)
       }

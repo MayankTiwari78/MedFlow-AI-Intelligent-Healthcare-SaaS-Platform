@@ -10,6 +10,7 @@ import {
   appointmentCancel,
   appointmentStatusAdmin,
   appointmentsAdmin,
+  medicalRecordsAdmin,
   patientAppointmentsAdmin,
   patientsAdmin
 } from "../controllers/adminController.js";
@@ -27,6 +28,7 @@ import {
   patientDirectoryQuerySchema,
   patientParamsSchema
 } from "../validators/adminValidators.js";
+import { medicalRecordQuerySchema } from "../validators/medicalRecordValidators.js";
 
 const adminRouter = Router();
 
@@ -71,6 +73,13 @@ adminRouter.get(
   authorizePermissions("users:read", "appointments:read"),
   validateRequest({ params: patientParamsSchema }),
   patientAppointmentsAdmin
+);
+adminRouter.get(
+  "/medical-records",
+  authAdmin,
+  authorizePermissions("users:read", "appointments:read"),
+  validateRequest({ query: medicalRecordQuerySchema }),
+  medicalRecordsAdmin
 );
 adminRouter.patch(
   "/appointments/:appointmentId/status",

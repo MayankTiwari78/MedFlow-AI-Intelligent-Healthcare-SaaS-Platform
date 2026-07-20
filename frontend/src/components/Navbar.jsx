@@ -50,6 +50,9 @@ const Navbar = () => {
                 <div className='mf-card min-w-52 flex flex-col gap-1 p-2'>
                   <p onClick={() => navigate('/my-profile')} className='cursor-pointer rounded px-3 py-2 hover:bg-mist hover:text-primary'>My profile</p>
                   <p onClick={() => navigate('/health-profile')} className='cursor-pointer rounded px-3 py-2 hover:bg-mist hover:text-primary'>Health profile</p>
+                  <p onClick={() => navigate('/medical-timeline')} className='cursor-pointer rounded px-3 py-2 hover:bg-mist hover:text-primary'>Medical timeline</p>
+                  <p onClick={() => navigate('/family-health')} className='cursor-pointer rounded px-3 py-2 hover:bg-mist hover:text-primary'>Family health</p>
+                  <p onClick={() => navigate('/health-card')} className='cursor-pointer rounded px-3 py-2 hover:bg-mist hover:text-primary'>Health card</p>
                   <p onClick={() => navigate('/my-appointments')} className='cursor-pointer rounded px-3 py-2 hover:bg-mist hover:text-primary'>My appointments</p>
                   <p onClick={() => navigate('/security')} className='cursor-pointer rounded px-3 py-2 hover:bg-mist hover:text-primary'>Security</p>
                   <p onClick={logout} className='cursor-pointer rounded px-3 py-2 text-red-700 hover:bg-red-50'>Log out</p>
@@ -72,6 +75,9 @@ const Navbar = () => {
             <NavLink onClick={() => setShowMenu(false)} to='/about' ><p className='px-4 py-2 inline-block'>ABOUT</p></NavLink>
             <NavLink onClick={() => setShowMenu(false)} to='/contact' ><p className='px-4 py-2 inline-block'>CONTACT</p></NavLink>
             {token && <NavLink onClick={() => setShowMenu(false)} to='/health-profile'><p className='px-4 py-2 inline-block'>HEALTH PROFILE</p></NavLink>}
+            {token && <NavLink onClick={() => setShowMenu(false)} to='/medical-timeline'><p className='px-4 py-2 inline-block'>MEDICAL TIMELINE</p></NavLink>}
+            {token && <NavLink onClick={() => setShowMenu(false)} to='/family-health'><p className='px-4 py-2 inline-block'>FAMILY HEALTH</p></NavLink>}
+            {token && <NavLink onClick={() => setShowMenu(false)} to='/health-card'><p className='px-4 py-2 inline-block'>HEALTH CARD</p></NavLink>}
           </ul>
         </div>
       </div>

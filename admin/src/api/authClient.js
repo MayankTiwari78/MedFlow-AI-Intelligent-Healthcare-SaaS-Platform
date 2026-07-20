@@ -1,13 +1,17 @@
 import axios from 'axios'
+import { toast } from 'react-toastify'
 
 let configured = false
 let backendBaseUrl = ''
 let setAdminToken = () => {}
 let setDoctorToken = () => {}
+let onPortalAuthCleared = () => {}
 let refreshPromise = null
+let sessionExpiredToastShown = false
 
 const tokenKeyForRole = (role) => (role === 'doctor' ? 'dToken' : 'aToken')
 const headerForRole = (role) => (role === 'doctor' ? 'dToken' : 'aToken')
+const sessionExpiredToastId = 'portal-session-expired'
 const inBrowser = () => typeof window !== 'undefined'
 
 const roleForUrl = (url = '') => {
@@ -23,6 +27,33 @@ const roleForUrl = (url = '') => {
 }
 
 const authEndpoint = (url = '') => url.includes('/api/v1/auth/')
+const refreshEndpoint = (url = '') => url.includes('/api/v1/auth/refresh')
+
+export const resetPortalSessionExpiredNotification = () => {
+  sessionExpiredToastShown = false
+}
+
+const notifySessionExpired = () => {
+  if (sessionExpiredToastShown || toast.isActive(sessionExpiredToastId)) {
+    return
+  }
+
+  sessionExpiredToastShown = true
+  toast.error('Your session has expired. Please log in again.', { toastId: sessionExpiredToastId })
+}
+
+export const isAuthSessionHandledError = (error) =>
+  Boolean(error?.__authSessionHandled || error?.config?._authSessionHandled)
+
+const markSessionHandled = (error) => {
+  if (error) {
+    error.__authSessionHandled = true
+  }
+
+  if (error?.config) {
+    error.config._authSessionHandled = true
+  }
+}
 
 const persistToken = (role, token) => {
   if (inBrowser()) {
@@ -43,6 +74,7 @@ const clearTokens = () => {
   }
   setAdminToken('')
   setDoctorToken('')
+  onPortalAuthCleared()
 }
 
 const refreshTokenForRole = async (expectedRole) => {
@@ -72,10 +104,11 @@ const refreshTokenForRole = async (expectedRole) => {
   return refreshPromise
 }
 
-export const configureAdminAuth = ({ backendUrl, setAToken, setDToken }) => {
+export const configureAdminAuth = ({ backendUrl, setAToken, setDToken, onAuthCleared } = {}) => {
   backendBaseUrl = backendUrl
   setAdminToken = setAToken || setAdminToken
   setDoctorToken = setDToken || setDoctorToken
+  onPortalAuthCleared = onAuthCleared || onPortalAuthCleared
   axios.defaults.withCredentials = true
 
   if (configured) {
@@ -116,6 +149,7 @@ export const configureAdminAuth = ({ backendUrl, setAToken, setDToken }) => {
         !original ||
         original.skipAuthRefresh ||
         original._retry ||
+        refreshEndpoint(url) ||
         authEndpoint(url) ||
         !role ||
         error.response?.status !== 401
@@ -134,6 +168,8 @@ export const configureAdminAuth = ({ backendUrl, setAToken, setDToken }) => {
         return axios(original)
       } catch {
         clearTokens()
+        notifySessionExpired()
+        markSessionHandled(error)
         return Promise.reject(error)
       }
     }

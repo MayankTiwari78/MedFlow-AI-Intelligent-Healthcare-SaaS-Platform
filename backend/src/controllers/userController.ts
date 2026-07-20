@@ -16,6 +16,14 @@ import {
   verifyRazorpayPayment,
   verifyStripePayment
 } from "../services/paymentService.js";
+import {
+  createFamilyMember,
+  listFamilyMembers,
+  removeFamilyMember,
+  type FamilyMemberPayload
+} from "../services/familyMemberService.js";
+import { getPatientHealthCard, lookupHealthCardStatus } from "../services/healthCardService.js";
+import { getPatientTimeline, listPatientVisibleRecords } from "../services/medicalRecordService.js";
 import type { Address } from "../types/domain.js";
 import { AppError } from "../utils/AppError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -29,6 +37,28 @@ const requireUserId = (userId?: string): string => {
   }
 
   return userId;
+};
+
+type HexStringable = { toHexString: () => string };
+
+const hasToHexString = (value: unknown): value is HexStringable =>
+  Boolean(
+    value &&
+      typeof value === "object" &&
+      "toHexString" in value &&
+      typeof value.toHexString === "function"
+  );
+
+const safeAuditId = (value: unknown): string => {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (hasToHexString(value)) {
+    return value.toHexString();
+  }
+
+  return "";
 };
 
 export const getProfile: RequestHandler = asyncHandler(async (req, res) => {
@@ -171,4 +201,67 @@ export const verifyStripe: RequestHandler = asyncHandler(async (req, res) => {
     req.authOrganizationId
   );
   sendSuccess(res, 200, "Payment Successful");
+});
+
+export const medicalTimeline: RequestHandler = asyncHandler(async (req, res) => {
+  const timeline = await getPatientTimeline(requireUserId(req.authUserId), req.authOrganizationId);
+  sendSuccess(res, 200, "Medical timeline loaded", { timeline }, { timeline });
+});
+
+export const patientMedicalRecords: RequestHandler = asyncHandler(async (req, res) => {
+  const records = await listPatientVisibleRecords(
+    requireUserId(req.authUserId),
+    req.authOrganizationId
+  );
+  sendSuccess(res, 200, "Medical records loaded", { records }, { records });
+});
+
+export const familyMembers: RequestHandler = asyncHandler(async (req, res) => {
+  const members = await listFamilyMembers(requireUserId(req.authUserId), req.authOrganizationId);
+  sendSuccess(res, 200, "Family members loaded", { members }, { members });
+});
+
+export const addFamilyMember: RequestHandler = asyncHandler(async (req, res) => {
+  const patientId = requireUserId(req.authUserId);
+  const member = await createFamilyMember(
+    patientId,
+    req.body as FamilyMemberPayload,
+    req.authOrganizationId
+  );
+  await writeAuditLog({
+    eventType: "family_member.created",
+    ...auditContextFromRequest(req),
+    target: { type: "family_member", id: safeAuditId(member._id) }
+  });
+  sendSuccess(res, 201, "Family member added", { member }, { member });
+});
+
+export const deleteFamilyMember: RequestHandler = asyncHandler(async (req, res) => {
+  const patientId = requireUserId(req.authUserId);
+  const familyMemberId = req.params.familyMemberId as string;
+  await removeFamilyMember(patientId, familyMemberId, req.authOrganizationId);
+  await writeAuditLog({
+    eventType: "family_member.removed",
+    ...auditContextFromRequest(req),
+    target: { type: "family_member", id: familyMemberId }
+  });
+  sendSuccess(res, 200, "Family member removed");
+});
+
+export const healthCard: RequestHandler = asyncHandler(async (req, res) => {
+  const card = await getPatientHealthCard(requireUserId(req.authUserId), req.authOrganizationId);
+  await writeAuditLog({
+    eventType: "health_card.viewed",
+    ...auditContextFromRequest(req),
+    target: { type: "patient", id: requireUserId(req.authUserId) }
+  });
+  sendSuccess(res, 200, "Health card loaded", { card }, { card });
+});
+
+export const healthCardLookup: RequestHandler = asyncHandler(async (req, res) => {
+  const status = await lookupHealthCardStatus(
+    req.params.lookupId as string,
+    req.authOrganizationId
+  );
+  sendSuccess(res, 200, "Health card status loaded", { status }, { status });
 });

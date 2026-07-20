@@ -35,6 +35,8 @@ export interface Doctor {
   passwordChangedAt?: Date;
   lastLoginAt?: Date;
   authenticationProvider: AuthenticationProvider;
+  demoSeedKey?: string;
+  demoDataLabel?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -111,7 +113,9 @@ const doctorSchema = new mongoose.Schema<Doctor>(
       type: String,
       enum: AUTHENTICATION_PROVIDERS,
       default: "LOCAL"
-    }
+    },
+    demoSeedKey: { type: String, index: true },
+    demoDataLabel: { type: String }
   },
   { minimize: false, timestamps: true }
 );

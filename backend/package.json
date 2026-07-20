@@ -13,7 +13,8 @@
     "lint": "eslint \"src/**/*.ts\" \"tests/**/*.ts\"",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\" \"*.json\" \"*.md\"",
     "test": "vitest run",
-    "backfill:phase2b": "tsx src/scripts/backfillPhase2B.ts"
+    "backfill:phase2b": "tsx src/scripts/backfillPhase2B.ts",
+    "seed:phase2c-demo": "tsx src/scripts/seedPhase2CDemo.ts"
   },
   "author": "Mayank Tiwari",
   "license": "ISC",

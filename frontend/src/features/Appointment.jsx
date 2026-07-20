@@ -5,11 +5,13 @@ import { assets } from '../assets/assets'
 import RelatedDoctors from '../components/RelatedDoctors'
 import axios from 'axios'
 import { toast } from 'react-toastify'
+import { isAuthSessionHandledError } from '../api/authClient'
+import { loginHrefForReturnTo } from '../lib/authNavigation'
 
 const Appointment = () => {
 
     const { docId } = useParams()
-    const { doctors, doctorsLoading, doctorsError, currencySymbol, backendUrl, token, getDoctosData } = useContext(AppContext)
+    const { authStatus, doctors, doctorsLoading, doctorsError, currencySymbol, backendUrl, token, getDoctosData } = useContext(AppContext)
     const daysOfWeek = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 
     const [docInfo, setDocInfo] = useState(false)
@@ -56,9 +58,13 @@ const Appointment = () => {
 
     const bookAppointment = async () => {
 
+        if (authStatus === 'initializing') {
+            return
+        }
+
         if (!token) {
             toast.warning('Login to book appointment')
-            return navigate('/login')
+            return navigate(loginHrefForReturnTo(`/appointment/${docId}`))
         }
 
         const selectedDay = docSlots[slotIndex]
@@ -82,7 +88,9 @@ const Appointment = () => {
 
         } catch (error) {
             console.log(error)
-            toast.error(error.message)
+            if (!isAuthSessionHandledError(error)) {
+                toast.error(error.message)
+            }
         }
 
     }

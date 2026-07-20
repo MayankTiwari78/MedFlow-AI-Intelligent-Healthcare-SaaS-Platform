@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 
 import { env } from "../config/env.js";
+import { DEFAULT_DOCTOR_IMAGE } from "../constants/defaults.js";
 import AppointmentModel from "../models/Appointment.js";
 import DoctorModel from "../models/Doctor.js";
 import OrganizationMembershipModel from "../models/OrganizationMembership.js";
@@ -85,7 +86,9 @@ export const createDoctor = async (
   }
 
   const hashedPassword = await bcrypt.hash(payload.password, 12);
-  const image = await uploadImageToCloudinary(file.path);
+  const image = await uploadImageToCloudinary(file.path, {
+    developmentFallbackUrl: DEFAULT_DOCTOR_IMAGE
+  });
 
   const doctor = await new DoctorModel({
     ...payload,

@@ -15,6 +15,14 @@ import {
 } from "../services/doctorService.js";
 import { listDoctorAvailableSlots } from "../services/availabilityService.js";
 import { writeAuditLog } from "../services/auditService.js";
+import {
+  createDoctorMedicalRecord,
+  finalizeDoctorMedicalRecord,
+  listDoctorPatientRecords,
+  updateDoctorMedicalRecord,
+  type MedicalRecordPayload,
+  type MedicalRecordUpdatePayload
+} from "../services/medicalRecordService.js";
 import type { Address } from "../types/domain.js";
 import { AppError } from "../utils/AppError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -28,6 +36,28 @@ const requireDoctorId = (doctorId?: string): string => {
   }
 
   return doctorId;
+};
+
+type HexStringable = { toHexString: () => string };
+
+const hasToHexString = (value: unknown): value is HexStringable =>
+  Boolean(
+    value &&
+      typeof value === "object" &&
+      "toHexString" in value &&
+      typeof value.toHexString === "function"
+  );
+
+const safeAuditId = (value: unknown): string => {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (hasToHexString(value)) {
+    return value.toHexString();
+  }
+
+  return "";
 };
 
 export const appointmentsDoctor: RequestHandler = asyncHandler(async (req, res) => {
@@ -171,4 +201,63 @@ export const doctorDashboard: RequestHandler = asyncHandler(async (req, res) => 
     req.authOrganizationId
   );
   sendSuccess(res, 200, "Dashboard loaded", { dashData }, { dashData });
+});
+
+export const createAppointmentMedicalRecord: RequestHandler = asyncHandler(async (req, res) => {
+  const appointmentId = req.params.appointmentId as string;
+  const record = await createDoctorMedicalRecord({
+    doctorId: requireDoctorId(req.authDoctorId),
+    appointmentId,
+    payload: req.body as MedicalRecordPayload,
+    organizationId: req.authOrganizationId
+  });
+  await writeAuditLog({
+    eventType: "medical_record.created",
+    ...auditContextFromRequest(req),
+    target: { type: "medical_record", id: safeAuditId(record._id) },
+    metadata: { appointmentId, status: record.status }
+  });
+  sendSuccess(res, 201, "Medical record saved", { record }, { record });
+});
+
+export const doctorPatientMedicalRecords: RequestHandler = asyncHandler(async (req, res) => {
+  const records = await listDoctorPatientRecords(
+    requireDoctorId(req.authDoctorId),
+    req.params.patientId as string,
+    req.authOrganizationId
+  );
+  sendSuccess(res, 200, "Medical records loaded", { records }, { records });
+});
+
+export const updateAppointmentMedicalRecord: RequestHandler = asyncHandler(async (req, res) => {
+  const recordId = req.params.recordId as string;
+  const record = await updateDoctorMedicalRecord({
+    doctorId: requireDoctorId(req.authDoctorId),
+    recordId,
+    payload: req.body as MedicalRecordUpdatePayload,
+    organizationId: req.authOrganizationId
+  });
+  await writeAuditLog({
+    eventType: record.status === "finalized" ? "medical_record.finalized" : "medical_record.updated",
+    ...auditContextFromRequest(req),
+    target: { type: "medical_record", id: recordId },
+    metadata: { status: record.status }
+  });
+  sendSuccess(res, 200, "Medical record updated", { record }, { record });
+});
+
+export const finalizeAppointmentMedicalRecord: RequestHandler = asyncHandler(async (req, res) => {
+  const recordId = req.params.recordId as string;
+  const record = await finalizeDoctorMedicalRecord(
+    requireDoctorId(req.authDoctorId),
+    recordId,
+    req.authOrganizationId
+  );
+  await writeAuditLog({
+    eventType: "medical_record.finalized",
+    ...auditContextFromRequest(req),
+    target: { type: "medical_record", id: recordId },
+    metadata: { patientVisible: record.patientVisible }
+  });
+  sendSuccess(res, 200, "Medical record finalized", { record }, { record });
 });

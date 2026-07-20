@@ -7,11 +7,15 @@ import {
   appointmentsDoctor,
   availableSlots,
   changeAvailablity,
+  createAppointmentMedicalRecord,
   doctorDashboard,
   doctorList,
+  doctorPatientMedicalRecords,
   doctorProfile,
+  finalizeAppointmentMedicalRecord,
   ownAvailability,
   updateClinicalNotes,
+  updateAppointmentMedicalRecord,
   updateOwnAvailability,
   updateDoctorProfile
 } from "../controllers/doctorController.js";
@@ -28,6 +32,13 @@ import {
   updateDoctorAvailabilitySchema,
   updateDoctorProfileSchema
 } from "../validators/doctorValidators.js";
+import {
+  appointmentMedicalRecordParamsSchema,
+  medicalRecordCreateSchema,
+  medicalRecordParamsSchema,
+  medicalRecordUpdateSchema,
+  patientMedicalRecordParamsSchema
+} from "../validators/medicalRecordValidators.js";
 
 const doctorRouter = Router();
 
@@ -70,6 +81,37 @@ doctorRouter.patch(
   authorizePermissions("appointments:update"),
   validateRequest({ params: clinicalNotesParamsSchema, body: updateClinicalNotesSchema }),
   updateClinicalNotes
+);
+doctorRouter.post(
+  "/appointments/:appointmentId/medical-records",
+  authDoctor,
+  authorizePermissions("appointments:update"),
+  validateRequest({
+    params: appointmentMedicalRecordParamsSchema,
+    body: medicalRecordCreateSchema
+  }),
+  createAppointmentMedicalRecord
+);
+doctorRouter.get(
+  "/patients/:patientId/medical-records",
+  authDoctor,
+  authorizePermissions("appointments:read"),
+  validateRequest({ params: patientMedicalRecordParamsSchema }),
+  doctorPatientMedicalRecords
+);
+doctorRouter.patch(
+  "/medical-records/:recordId",
+  authDoctor,
+  authorizePermissions("appointments:update"),
+  validateRequest({ params: medicalRecordParamsSchema, body: medicalRecordUpdateSchema }),
+  updateAppointmentMedicalRecord
+);
+doctorRouter.post(
+  "/medical-records/:recordId/finalize",
+  authDoctor,
+  authorizePermissions("appointments:update"),
+  validateRequest({ params: medicalRecordParamsSchema }),
+  finalizeAppointmentMedicalRecord
 );
 doctorRouter.post(
   "/change-availability",

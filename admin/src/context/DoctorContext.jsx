@@ -4,7 +4,7 @@ import axios from "axios";
 import { createContext, useCallback, useEffect, useState } from "react";
 import { toast } from "react-toastify";
 
-import { configureAdminAuth } from "../api/authClient";
+import { configureAdminAuth, isAuthSessionHandledError } from "../api/authClient";
 import { publicEnv } from "../lib/env";
 
 export const DoctorContext = createContext();
@@ -29,7 +29,7 @@ const DoctorContextProvider = ({ children }) => {
       if (data.success) setAppointments(data.appointments.reverse());
       else toast.error(data.message);
     } catch (error) {
-      toast.error(error.response?.data?.message || error.message || "Unable to load appointments");
+      if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message || "Unable to load appointments");
     }
   }, [backendUrl, dToken]);
 
@@ -38,7 +38,7 @@ const DoctorContextProvider = ({ children }) => {
       const { data } = await axios.get(`${backendUrl}/api/doctor/profile`, { headers: { dToken } });
       setProfileData(data.profileData);
     } catch (error) {
-      toast.error(error.response?.data?.message || error.message || "Unable to load profile");
+      if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message || "Unable to load profile");
     }
   }, [backendUrl, dToken]);
 
@@ -48,7 +48,7 @@ const DoctorContextProvider = ({ children }) => {
       if (data.success) setDashData(data.dashData);
       else toast.error(data.message);
     } catch (error) {
-      toast.error(error.response?.data?.message || error.message || "Unable to load dashboard");
+      if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message || "Unable to load dashboard");
     }
   }, [backendUrl, dToken]);
 
@@ -65,7 +65,7 @@ const DoctorContextProvider = ({ children }) => {
           await Promise.all([getAppointments(), getDashData()]);
         } else toast.error(data.message);
       } catch (error) {
-        toast.error(error.response?.data?.message || error.message || successMessage);
+        if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message || successMessage);
       }
     },
     [backendUrl, dToken, getAppointments, getDashData]
@@ -92,7 +92,7 @@ const DoctorContextProvider = ({ children }) => {
           await getAppointments();
         } else toast.error(data.message);
       } catch (error) {
-        toast.error(error.response?.data?.message || error.message || "Unable to save clinical notes");
+        if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message || "Unable to save clinical notes");
       }
     },
     [backendUrl, dToken, getAppointments]

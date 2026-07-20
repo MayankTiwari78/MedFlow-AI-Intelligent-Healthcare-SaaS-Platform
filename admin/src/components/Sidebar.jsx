@@ -33,6 +33,10 @@ const Sidebar = () => {
           <img className='min-w-5' src={assets.people_icon} alt='' />
           <p className='hidden md:block'>Patients</p>
         </NavLink>
+        <NavLink to={'/medical-records'} className={({ isActive }) => `flex items-center gap-3 rounded-md px-3 py-3 md:min-w-64 cursor-pointer ${isActive ? 'bg-[#E7F4F5] font-semibold text-primary' : 'hover:bg-mist'}`}>
+          <img className='min-w-5' src={assets.list_icon} alt='' />
+          <p className='hidden md:block'>Medical Records</p>
+        </NavLink>
         <NavLink to={'/memberships'} className={({ isActive }) => `flex items-center gap-3 rounded-md px-3 py-3 md:min-w-64 cursor-pointer ${isActive ? 'bg-[#E7F4F5] font-semibold text-primary' : 'hover:bg-mist'}`}>
           <img className='min-w-5' src={assets.people_icon} alt='' />
           <p className='hidden md:block'>Memberships</p>

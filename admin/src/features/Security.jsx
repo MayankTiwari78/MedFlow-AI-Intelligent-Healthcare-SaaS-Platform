@@ -4,6 +4,7 @@ import { toast } from 'react-toastify'
 import { AdminContext } from '../context/AdminContext'
 import { DoctorContext } from '../context/DoctorContext'
 import { publicEnv } from '../lib/env'
+import { isAuthSessionHandledError } from '../api/authClient'
 
 const Security = () => {
   const backendUrl = publicEnv.backendUrl
@@ -40,40 +41,66 @@ const Security = () => {
   }, [authHeaders, backendUrl, token])
 
   useEffect(() => {
-    loadData().catch((error) => toast.error(error.response?.data?.message || error.message))
+    loadData().catch((error) => {
+      if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message)
+    })
   }, [loadData])
 
   const beginSetup = async () => {
-    const { data } = await axios.post(backendUrl + '/api/v1/auth/2fa/setup/begin', {}, { headers: authHeaders(), withCredentials: true })
-    setSetup(data.data.setup)
+    try {
+      const { data } = await axios.post(backendUrl + '/api/v1/auth/2fa/setup/begin', {}, { headers: authHeaders(), withCredentials: true })
+      setSetup(data.data.setup)
+    } catch (error) {
+      if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message)
+    }
   }
 
   const confirmSetup = async () => {
-    const { data } = await axios.post(backendUrl + '/api/v1/auth/2fa/setup/confirm', { totpCode }, { headers: authHeaders(), withCredentials: true })
-    setRecoveryCodes(data.data.recoveryCodes)
-    setSetup(null)
-    await loadData()
+    try {
+      const { data } = await axios.post(backendUrl + '/api/v1/auth/2fa/setup/confirm', { totpCode }, { headers: authHeaders(), withCredentials: true })
+      setRecoveryCodes(data.data.recoveryCodes)
+      setSetup(null)
+      await loadData()
+    } catch (error) {
+      if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message)
+    }
   }
 
   const regenerateCodes = async () => {
-    const { data } = await axios.post(backendUrl + '/api/v1/auth/2fa/recovery-codes/regenerate', { password, totpCode: totpCode || undefined, recoveryCode: recoveryCode || undefined }, { headers: authHeaders(), withCredentials: true })
-    setRecoveryCodes(data.data.recoveryCodes)
-    clearToken()
+    try {
+      const { data } = await axios.post(backendUrl + '/api/v1/auth/2fa/recovery-codes/regenerate', { password, totpCode: totpCode || undefined, recoveryCode: recoveryCode || undefined }, { headers: authHeaders(), withCredentials: true })
+      setRecoveryCodes(data.data.recoveryCodes)
+      clearToken()
+    } catch (error) {
+      if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message)
+    }
   }
 
   const disableTwoFactor = async () => {
-    await axios.post(backendUrl + '/api/v1/auth/2fa/disable', { password, totpCode: totpCode || undefined, recoveryCode: recoveryCode || undefined }, { headers: authHeaders(), withCredentials: true })
-    clearToken()
+    try {
+      await axios.post(backendUrl + '/api/v1/auth/2fa/disable', { password, totpCode: totpCode || undefined, recoveryCode: recoveryCode || undefined }, { headers: authHeaders(), withCredentials: true })
+      clearToken()
+    } catch (error) {
+      if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message)
+    }
   }
 
   const revokeSession = async (sessionId) => {
-    await axios.delete(backendUrl + `/api/v1/auth/sessions/${sessionId}`, { headers: authHeaders(), withCredentials: true })
-    await loadData()
+    try {
+      await axios.delete(backendUrl + `/api/v1/auth/sessions/${sessionId}`, { headers: authHeaders(), withCredentials: true })
+      await loadData()
+    } catch (error) {
+      if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message)
+    }
   }
 
   const revokeOthers = async () => {
-    await axios.post(backendUrl + '/api/v1/auth/sessions/revoke-others', {}, { headers: authHeaders(), withCredentials: true })
-    await loadData()
+    try {
+      await axios.post(backendUrl + '/api/v1/auth/sessions/revoke-others', {}, { headers: authHeaders(), withCredentials: true })
+      await loadData()
+    } catch (error) {
+      if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message)
+    }
   }
 
   return (

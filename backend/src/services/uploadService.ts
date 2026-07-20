@@ -1,9 +1,30 @@
 import fs from "node:fs/promises";
 
-import { cloudinary } from "../config/cloudinary.js";
+import {
+  CLOUDINARY_CONFIGURATION_ERROR,
+  cloudinary,
+  hasValidCloudinaryCredentials
+} from "../config/cloudinary.js";
+import { env } from "../config/env.js";
+import { AppError } from "../utils/AppError.js";
 
-export const uploadImageToCloudinary = async (filePath: string): Promise<string> => {
+type UploadImageOptions = {
+  developmentFallbackUrl?: string;
+};
+
+export const uploadImageToCloudinary = async (
+  filePath: string,
+  options: UploadImageOptions = {}
+): Promise<string> => {
   try {
+    if (!hasValidCloudinaryCredentials()) {
+      if (env.NODE_ENV !== "production" && options.developmentFallbackUrl) {
+        return options.developmentFallbackUrl;
+      }
+
+      throw new AppError(CLOUDINARY_CONFIGURATION_ERROR, 500);
+    }
+
     const upload = await cloudinary.uploader.upload(filePath, { resource_type: "image" });
     return upload.secure_url;
   } finally {

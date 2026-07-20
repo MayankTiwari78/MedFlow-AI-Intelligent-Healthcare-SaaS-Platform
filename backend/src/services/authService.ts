@@ -81,7 +81,7 @@ export type LoginResult = AuthResult | TwoFactorRequiredResult;
 
 export interface RegistrationResult {
   account: SafeAccountResponse;
-  verificationExpiresAt: Date;
+  verificationExpiresAt?: Date;
 }
 
 const safeAccount = (
@@ -138,6 +138,9 @@ const issueSession = async (
 const verifyAdminPassword = (email: string, password: string): boolean =>
   normalizeEmail(email) === normalizeEmail(env.ADMIN_EMAIL) && password === env.ADMIN_PASSWORD;
 
+const shouldAutoVerifyDevelopmentEmail = (): boolean =>
+  env.NODE_ENV !== "production" && env.DEVELOPMENT_AUTO_VERIFY_EMAIL === "true";
+
 export const registerPatient = async (
   name: string,
   email: string,
@@ -147,6 +150,8 @@ export const registerPatient = async (
   await ensureEmailAvailableForPatientRegistration(normalizedEmail);
 
   const hashedPassword = await bcrypt.hash(password, 12);
+  const autoVerifyEmail = shouldAutoVerifyDevelopmentEmail();
+  const verifiedAt = autoVerifyEmail ? new Date() : undefined;
 
   try {
     const user = await new UserModel({
@@ -154,8 +159,9 @@ export const registerPatient = async (
       email: normalizedEmail,
       normalizedEmail,
       password: hashedPassword,
-      emailVerified: false,
-      accountStatus: "PENDING_VERIFICATION",
+      emailVerified: autoVerifyEmail,
+      emailVerifiedAt: verifiedAt,
+      accountStatus: autoVerifyEmail ? "ACTIVE" : "PENDING_VERIFICATION",
       failedLoginAttempts: 0,
       authenticationProvider: "LOCAL",
       role: "PATIENT"
@@ -165,6 +171,19 @@ export const registerPatient = async (
 
     if (!account) {
       throw new AppError("Registration failed", 500);
+    }
+
+    if (autoVerifyEmail) {
+      await writeAuditLog({
+        eventType: "auth.registration",
+        actor: { accountId: account.id, accountType: account.type, role: account.role },
+        target: { type: "account", id: account.id },
+        metadata: { publicRegistration: true, developmentAutoVerified: true }
+      });
+
+      return {
+        account: safeAccount(account)
+      };
     }
 
     const challenge = await createTokenChallenge(account, "EMAIL_VERIFICATION");
@@ -182,7 +201,7 @@ export const registerPatient = async (
       eventType: "auth.registration",
       actor: { accountId: account.id, accountType: account.type, role: account.role },
       target: { type: "account", id: account.id },
-      metadata: { publicRegistration: true }
+      metadata: { publicRegistration: true, developmentAutoVerified: false }
     });
 
     return {

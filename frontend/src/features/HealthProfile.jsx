@@ -2,8 +2,9 @@ import axios from 'axios'
 import { useContext, useEffect, useMemo, useState } from 'react'
 import { toast } from 'react-toastify'
 
-import AccessPrompt from '../components/AccessPrompt'
 import { AppContext } from '../context/AppContext'
+import { isAuthSessionHandledError } from '../api/authClient'
+import { useProtectedPatientRoute } from '../hooks/useProtectedPatientRoute'
 
 const emptyProfile = {
   dob: '',
@@ -20,7 +21,8 @@ const listText = (items) => items.join(', ')
 const parseList = (value) => [...new Set(value.split(',').map((item) => item.trim()).filter(Boolean))]
 
 const HealthProfile = () => {
-  const { backendUrl, token } = useContext(AppContext)
+  const { authStatus, backendUrl, token } = useContext(AppContext)
+  useProtectedPatientRoute({ authStatus, token })
   const [profile, setProfile] = useState(emptyProfile)
   const [draft, setDraft] = useState(emptyProfile)
   const [loading, setLoading] = useState(true)
@@ -39,7 +41,9 @@ const HealthProfile = () => {
       setProfile(next)
       setDraft(next)
     } catch (requestError) {
-      setError(requestError.response?.data?.message || 'Your health profile is temporarily unavailable.')
+      if (!isAuthSessionHandledError(requestError)) {
+        setError(requestError.response?.data?.message || 'Your health profile is temporarily unavailable.')
+      }
     } finally {
       setLoading(false)
     }
@@ -79,13 +83,16 @@ const HealthProfile = () => {
       setEditing(false)
       toast.success('Health profile saved securely')
     } catch (requestError) {
-      setValidationError(requestError.response?.data?.message || 'We could not save your health profile. Review the fields and try again.')
+      if (!isAuthSessionHandledError(requestError)) {
+        setValidationError(requestError.response?.data?.message || 'We could not save your health profile. Review the fields and try again.')
+      }
     } finally {
       setSaving(false)
     }
   }
 
-  if (!token) return <AccessPrompt title='Sign in to manage your health profile' description='Health details are private and available only inside your protected patient account.' />
+  if (authStatus === 'initializing') return <div className='space-y-5 py-10'><div className='h-32 animate-pulse rounded-lg bg-[#E7F4F5]' /><div className='grid gap-5 lg:grid-cols-2'><div className='h-80 animate-pulse rounded-lg bg-white' /><div className='h-80 animate-pulse rounded-lg bg-white' /></div></div>
+  if (!token) return <div className='space-y-5 py-10'><div className='h-32 animate-pulse rounded-lg bg-[#E7F4F5]' /><div className='grid gap-5 lg:grid-cols-2'><div className='h-80 animate-pulse rounded-lg bg-white' /><div className='h-80 animate-pulse rounded-lg bg-white' /></div></div>
   if (loading) return <div className='space-y-5 py-10'><div className='h-32 animate-pulse rounded-lg bg-[#E7F4F5]' /><div className='grid gap-5 lg:grid-cols-2'><div className='h-80 animate-pulse rounded-lg bg-white' /><div className='h-80 animate-pulse rounded-lg bg-white' /></div></div>
   if (error) return <section className='py-14'><div className='mf-card mx-auto max-w-2xl p-10 text-center'><p className='mf-eyebrow'>Protected health record</p><h1 className='mt-2 text-2xl font-semibold text-ink'>Your profile could not be loaded</h1><p className='mt-3 text-sm text-slate-600'>{error}</p><button type='button' className='mf-button mt-6' onClick={loadProfile}>Try again</button></div></section>
 

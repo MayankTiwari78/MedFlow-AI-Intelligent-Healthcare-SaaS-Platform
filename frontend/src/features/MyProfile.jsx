@@ -3,7 +3,8 @@ import { AppContext } from '../context/AppContext'
 import axios from 'axios'
 import { toast } from 'react-toastify'
 import { assets } from '../assets/assets'
-import AccessPrompt from '../components/AccessPrompt'
+import { isAuthSessionHandledError } from '../api/authClient'
+import { useProtectedPatientRoute } from '../hooks/useProtectedPatientRoute'
 
 const MyProfile = () => {
 
@@ -11,7 +12,8 @@ const MyProfile = () => {
 
     const [image, setImage] = useState(false)
 
-    const { token, backendUrl, userData, setUserData, loadUserProfileData } = useContext(AppContext)
+    const { authStatus, token, backendUrl, userData, setUserData, loadUserProfileData } = useContext(AppContext)
+    useProtectedPatientRoute({ authStatus, token })
 
     // Function to update user profile data using API
     const updateUserProfileData = async () => {
@@ -41,13 +43,19 @@ const MyProfile = () => {
 
         } catch (error) {
             console.log(error)
-            toast.error(error.message)
+            if (!isAuthSessionHandledError(error)) {
+                toast.error(error.message)
+            }
         }
 
     }
 
+    if (authStatus === 'initializing') {
+        return <div className='py-12'><div className='mf-card h-80 animate-pulse bg-[#EAF3F4]' /></div>
+    }
+
     if (!token) {
-        return <AccessPrompt title='Sign in to view your profile' description='Contact details and personal information are available only inside your protected account.' />
+        return <div className='py-12'><div className='mf-card h-80 animate-pulse bg-[#EAF3F4]' /></div>
     }
 
     return userData ? (

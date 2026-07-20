@@ -1,9 +1,11 @@
-import { useContext, useEffect, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import { AppContext } from '../context/AppContext'
 import axios from 'axios'
 import { toast } from 'react-toastify'
-import { useNavigate } from '../lib/routerCompat'
+import { useNavigate, useSearchParams } from '../lib/routerCompat'
 import AuthShell from '../components/AuthShell'
+import { resetSessionExpiredNotification } from '../api/authClient'
+import { safeLoginDestination } from '../lib/authNavigation'
 
 const Login = () => {
 
@@ -14,9 +16,12 @@ const Login = () => {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const loginNavigationStarted = useRef(false)
 
   const navigate = useNavigate()
-  const { backendUrl, token, setToken } = useContext(AppContext)
+  const [searchParams] = useSearchParams()
+  const destination = safeLoginDestination(searchParams.get('returnTo'))
+  const { authStatus, backendUrl, token, setToken } = useContext(AppContext)
 
   const onSubmitHandler = async (event) => {
     event.preventDefault();
@@ -39,11 +44,13 @@ const Login = () => {
         const { data } = await axios.post(backendUrl + '/api/user/login', { email, password }, { withCredentials: true })
 
         if (data.success && data.data?.requiresTwoFactor) {
-          sessionStorage.setItem('patientTwoFactorChallenge', JSON.stringify(data.data))
+          sessionStorage.setItem('patientTwoFactorChallenge', JSON.stringify({ ...data.data, returnTo: destination }))
           navigate('/two-factor-login')
         } else if (data.success) {
-          localStorage.setItem('token', data.token)
+          resetSessionExpiredNotification()
           setToken(data.token)
+          loginNavigationStarted.current = true
+          navigate(destination)
         } else {
           toast.error(data.message)
         }
@@ -58,10 +65,10 @@ const Login = () => {
   }
 
   useEffect(() => {
-    if (token) {
-      navigate('/')
+    if (authStatus === 'authenticated' && token && !loginNavigationStarted.current) {
+      navigate(destination)
     }
-  }, [navigate, token])
+  }, [authStatus, destination, navigate, token])
 
   return (
     <AuthShell eyebrow='MedFlow AI account' title={state === 'Sign Up' ? 'Create your account' : 'Welcome back'} description={`Please ${state === 'Sign Up' ? 'sign up' : 'sign in'} to book appointments and manage your care securely.`}>

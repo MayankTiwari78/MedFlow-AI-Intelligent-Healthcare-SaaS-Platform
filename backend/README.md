@@ -68,6 +68,7 @@ Phase 1B auth variables:
 - `DEFAULT_ORGANIZATION_NAME`, `DEFAULT_ORGANIZATION_SLUG`: default organization used by the safe migration/backfill foundation.
 - `LOG_LEVEL`, `SERVICE_NAME`: structured logger configuration.
 - `ENABLE_API_DOCS`: enables `/api-docs` outside development. `/api-docs.json` remains available for trusted tooling.
+- `DEVELOPMENT_AUTO_VERIFY_EMAIL`: optional local-development bypass. Set to exactly `true` only outside production to mark newly registered patient accounts as verified immediately and skip verification email delivery. Production never honors this bypass.
 
 `JWT_SECRET` remains as a transitional legacy-token secret and fallback in non-production. New production deployments should use distinct access and refresh secrets.
 
@@ -127,6 +128,8 @@ Registration:
 4. The patient is created as `PENDING_VERIFICATION` and `emailVerified=false`.
 5. A single-use verification challenge is stored as a hash and delivered by email.
 6. The response does not include a refresh token, raw verification token, OTP, or password hash.
+
+Local development can set `DEVELOPMENT_AUTO_VERIFY_EMAIL=true` to create new patient accounts as already verified and avoid SMTP setup. The bypass activates only when `NODE_ENV` is not `production`; production registration always keeps new accounts pending email verification.
 
 Login:
 
@@ -215,6 +218,65 @@ npx tsx src/scripts/backfillPhase1C.ts
 ```
 
 This script creates/reuses the default organization, maps existing users to `PATIENT`, doctors to `DOCTOR`, configured admin compatibility to `HOSPITAL_ADMIN`, creates missing memberships, associates missing organization IDs, initializes disabled 2FA security records, and reports duplicate active membership conflicts. It does not create `SUPER_ADMIN`, delete records, contact external services, or run automatically during startup.
+
+## Local Phase 2C Demo Seed
+
+The Phase 2C demo seed is fictional local-development data only. It never runs automatically and refuses to run unless `NODE_ENV=development` and `ALLOW_PHASE2C_DEMO_SEED=true`.
+
+It creates only records tagged with `demoSeedKey` values beginning with `phase2c-demo:` and visible labels/text containing `Demo data`. Existing tagged records are skipped, and existing non-demo records are never overwritten or deleted.
+
+To run it against your local development database:
+
+```powershell
+cd backend
+$env:ALLOW_PHASE2C_DEMO_SEED = "true"
+npm run seed:phase2c-demo
+Remove-Item Env:\ALLOW_PHASE2C_DEMO_SEED
+```
+
+For bash-compatible shells:
+
+```bash
+cd backend
+ALLOW_PHASE2C_DEMO_SEED=true npm run seed:phase2c-demo
+```
+
+The demo login password printed by the command is fictional and intended only for local development. Do not enable this seed guard for shared, staging, or production databases.
+
+The script currently inserts:
+
+- 3 fictional demo patients
+- 2 fictional demo doctors with availability
+- completed and upcoming demo appointments
+- finalized demo timeline records, vaccination entries, and prescription examples
+- demo family-member/contact examples
+
+Safe local reset:
+
+1. Confirm the database is your disposable local development database.
+2. Delete only records tagged with `demoSeedKey: /^phase2c-demo:/`.
+3. Delete organization memberships only for the tagged demo account IDs.
+4. Re-run `npm run seed:phase2c-demo` with the same explicit guard if you want fresh demo data.
+
+Example `mongosh` reset for a local development database only:
+
+```javascript
+const demoKey = /^phase2c-demo:/;
+const demoUserIds = db.users.find({ demoSeedKey: demoKey }, { _id: 1 }).toArray().map((doc) => String(doc._id));
+const demoDoctorIds = db.doctors.find({ demoSeedKey: demoKey }, { _id: 1 }).toArray().map((doc) => String(doc._id));
+
+db.appointments.deleteMany({ demoSeedKey: demoKey });
+db.medical_records.deleteMany({ demoSeedKey: demoKey });
+db.family_members.deleteMany({ demoSeedKey: demoKey });
+db.organization_memberships.deleteMany({
+  $or: [
+    { accountType: "patient", accountId: { $in: demoUserIds } },
+    { accountType: "doctor", accountId: { $in: demoDoctorIds } }
+  ]
+});
+db.users.deleteMany({ demoSeedKey: demoKey });
+db.doctors.deleteMany({ demoSeedKey: demoKey });
+```
 
 ## Payment Notes
 

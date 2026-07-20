@@ -88,6 +88,8 @@ const fakeDb = vi.hoisted(() => {
   const memberships = new Map<string, RecordData>();
   const auditLogs = new Map<string, RecordData>();
   const authSecurity = new Map<string, RecordData>();
+  const medicalRecords = new Map<string, RecordData>();
+  const familyMembers = new Map<string, RecordData>();
 
   const makeId = () => counter.toString(16).padStart(24, "0");
 
@@ -527,6 +529,58 @@ const fakeDb = vi.hoisted(() => {
     }
   }
 
+  class MedicalRecordModel extends FakeDocument {
+    public override async save() {
+      this.status ??= "draft";
+      this.patientVisible ??= false;
+      if (this.status === "finalized") {
+        this.finalizedAt ??= new Date();
+      }
+      medicalRecords.set(this._id, this as RecordData);
+      return this;
+    }
+
+    public static findOne(filter: QueryFilter) {
+      return Promise.resolve(
+        [...medicalRecords.values()].find((record) => matches(record, filter)) ?? null
+      );
+    }
+
+    public static findById(id: string) {
+      return query(medicalRecords.get(id) ?? null);
+    }
+
+    public static find(filter: QueryFilter = {}) {
+      return query([...medicalRecords.values()].filter((record) => matches(record, filter)));
+    }
+  }
+
+  class FamilyMemberModel extends FakeDocument {
+    public override async save() {
+      familyMembers.set(this._id, this as RecordData);
+      return this;
+    }
+
+    public static findOne(filter: QueryFilter) {
+      return Promise.resolve(
+        [...familyMembers.values()].find((familyMember) => matches(familyMember, filter)) ?? null
+      );
+    }
+
+    public static find(filter: QueryFilter = {}) {
+      return query([...familyMembers.values()].filter((familyMember) => matches(familyMember, filter)));
+    }
+
+    public static deleteOne(filter: QueryFilter) {
+      const item = [...familyMembers.values()].find((familyMember) => matches(familyMember, filter));
+      if (item) {
+        familyMembers.delete(item._id);
+        return Promise.resolve({ deletedCount: 1 });
+      }
+      return Promise.resolve({ deletedCount: 0 });
+    }
+  }
+
   const patientPassword = "PatientPass12!";
   const doctorPassword = "DoctorPass12!";
 
@@ -540,6 +594,8 @@ const fakeDb = vi.hoisted(() => {
     memberships.clear();
     auditLogs.clear();
     authSecurity.clear();
+    medicalRecords.clear();
+    familyMembers.clear();
     counter = 10;
 
     organizations.set(
@@ -791,6 +847,8 @@ const fakeDb = vi.hoisted(() => {
     memberships,
     auditLogs,
     authSecurity,
+    medicalRecords,
+    familyMembers,
     patientPassword,
     doctorPassword,
     UserModel,
@@ -801,7 +859,9 @@ const fakeDb = vi.hoisted(() => {
     OrganizationModel,
     OrganizationMembershipModel,
     AuditLogModel,
-    AuthSecurityModel
+    AuthSecurityModel,
+    MedicalRecordModel,
+    FamilyMemberModel
   };
 });
 
@@ -816,16 +876,43 @@ vi.mock("../src/models/OrganizationMembership.js", () => ({
 }));
 vi.mock("../src/models/AuditLog.js", () => ({ default: fakeDb.AuditLogModel }));
 vi.mock("../src/models/AuthSecurity.js", () => ({ default: fakeDb.AuthSecurityModel }));
+vi.mock("../src/models/MedicalRecord.js", () => ({
+  default: fakeDb.MedicalRecordModel,
+  MEDICAL_RECORD_TYPES: [
+    "consultation_summary",
+    "diagnosis_history",
+    "allergy_update",
+    "vaccination_record",
+    "report_metadata",
+    "treatment_plan",
+    "prescription_plan"
+  ],
+  MEDICAL_RECORD_STATUSES: ["draft", "finalized"]
+}));
+vi.mock("../src/models/FamilyMember.js", () => ({ default: fakeDb.FamilyMemberModel }));
 vi.mock("bcrypt", () => ({
   default: {
     hash: vi.fn(async (password: string) => `hashed:${password}`),
     compare: vi.fn(async (password: string, hash: string) => hash === `hashed:${password}`)
   }
 }));
+const cloudinaryMock = vi.hoisted(() => ({
+  config: vi.fn(),
+  upload: vi.fn(async () => ({ secure_url: "https://res.cloudinary.com/test/doctor.png" }))
+}));
+vi.mock("cloudinary", () => ({
+  v2: {
+    config: cloudinaryMock.config,
+    uploader: {
+      upload: cloudinaryMock.upload
+    }
+  }
+}));
 
 describe("MedFlow backend foundation and Phase 1B authentication", () => {
   let app: Express;
   let emailService: typeof import("../src/services/emailService.js");
+  let backendEnv: typeof import("../src/config/env.js");
 
   const strongPassword = "NewPatient12!";
   const tokenFor = (id: string) =>
@@ -871,12 +958,41 @@ describe("MedFlow backend foundation and Phase 1B authentication", () => {
 
   const secretFromOtpAuthUri = (uri: string) => new URL(uri).searchParams.get("secret") ?? "";
 
+  const addDoctorRequest = (email: string) =>
+    request(app)
+      .post("/api/admin/add-doctor")
+      .set("aToken", adminToken())
+      .field("name", "New Doctor")
+      .field("email", email)
+      .field("password", "DoctorPass12!")
+      .field("speciality", "General physician")
+      .field("degree", "MBBS")
+      .field("experience", "5 Years")
+      .field("about", "A careful clinician.")
+      .field("fees", "500")
+      .field("address", JSON.stringify({ line1: "Clinic", line2: "City" }))
+      .attach("image", Buffer.from("doctor image"), {
+        filename: "doctor.png",
+        contentType: "image/png"
+      });
+
   beforeAll(async () => {
     app = (await import("../src/app.js")).default;
     emailService = await import("../src/services/emailService.js");
+    backendEnv = await import("../src/config/env.js");
   });
 
   beforeEach(() => {
+    backendEnv.env.NODE_ENV = "test";
+    backendEnv.env.DEVELOPMENT_AUTO_VERIFY_EMAIL = "false";
+    backendEnv.env.CLOUDINARY_NAME = "test-cloud";
+    backendEnv.env.CLOUDINARY_API_KEY = "test-key";
+    backendEnv.env.CLOUDINARY_SECRET_KEY = "test-secret";
+    cloudinaryMock.config.mockReset();
+    cloudinaryMock.upload.mockReset();
+    cloudinaryMock.upload.mockResolvedValue({
+      secure_url: "https://res.cloudinary.com/test/doctor.png"
+    });
     fakeDb.reset();
     emailService.clearDevelopmentEmailOutbox();
   });
@@ -939,7 +1055,7 @@ describe("MedFlow backend foundation and Phase 1B authentication", () => {
     });
   });
 
-  it("registers a patient safely and sends a verification challenge", async () => {
+  it("keeps development auto-verification disabled unless explicitly enabled", async () => {
     const response = await request(app)
       .post("/api/user/register")
       .send({
@@ -961,6 +1077,66 @@ describe("MedFlow backend foundation and Phase 1B authentication", () => {
       "PENDING_VERIFICATION"
     );
     expect(latestPreviewToken("EMAIL_VERIFICATION")).toBeTruthy();
+  });
+
+  it("auto-verifies development registrations and allows immediate login when explicitly enabled", async () => {
+    backendEnv.env.DEVELOPMENT_AUTO_VERIFY_EMAIL = "true";
+
+    const response = await request(app)
+      .post("/api/user/register")
+      .send({
+        name: "Auto Verified",
+        email: "auto.verified@example.com",
+        password: strongPassword
+      })
+      .expect(201);
+
+    expect(response.body.data.account.emailVerified).toBe(true);
+    expect(response.body.data.verificationExpiresAt).toBeUndefined();
+    expect(fakeDb.users.get(response.body.data.account.id)?.accountStatus).toBe("ACTIVE");
+    expect(fakeDb.users.get(response.body.data.account.id)?.emailVerifiedAt).toBeInstanceOf(Date);
+    expect(latestPreviewToken("EMAIL_VERIFICATION")).toBeUndefined();
+    expect(
+      [...fakeDb.challenges.values()].some(
+        (challenge) =>
+          challenge.accountId === response.body.data.account.id &&
+          challenge.purpose === "EMAIL_VERIFICATION"
+      )
+    ).toBe(false);
+
+    const login = await request(app)
+      .post("/api/user/login")
+      .send({ email: "auto.verified@example.com", password: strongPassword })
+      .expect(200);
+
+    expect(login.body.token).toBeTruthy();
+    expect(login.body.data.account.emailVerified).toBe(true);
+  });
+
+  it("keeps production registrations pending even when development auto-verify is set", async () => {
+    backendEnv.env.NODE_ENV = "production";
+    backendEnv.env.DEVELOPMENT_AUTO_VERIFY_EMAIL = "true";
+
+    const response = await request(app)
+      .post("/api/user/register")
+      .send({
+        name: "Production Patient",
+        email: "production.patient@example.com",
+        password: strongPassword
+      })
+      .expect(201);
+
+    expect(response.body.data.account.emailVerified).toBe(false);
+    expect(response.body.data.verificationExpiresAt).toBeTruthy();
+    expect(fakeDb.users.get(response.body.data.account.id)?.accountStatus).toBe(
+      "PENDING_VERIFICATION"
+    );
+    expect(latestPreviewToken("EMAIL_VERIFICATION")).toBeTruthy();
+
+    await request(app)
+      .post("/api/user/login")
+      .send({ email: "production.patient@example.com", password: strongPassword })
+      .expect(403);
   });
 
   it("rejects weak registration passwords and duplicate patient emails", async () => {
@@ -1044,6 +1220,56 @@ describe("MedFlow backend foundation and Phase 1B authentication", () => {
 
     expect(doctor.body.token).toBeTruthy();
     expect(admin.body.token).toBeTruthy();
+  });
+
+  it("creates doctors in development without Cloudinary credentials using a placeholder image", async () => {
+    backendEnv.env.NODE_ENV = "development";
+    backendEnv.env.CLOUDINARY_NAME = "placeholder";
+    backendEnv.env.CLOUDINARY_API_KEY = "";
+    backendEnv.env.CLOUDINARY_SECRET_KEY = "replace-with-cloudinary-secret-key";
+
+    await addDoctorRequest("dev-placeholder-doctor@example.com").expect(201);
+
+    const doctor = [...fakeDb.doctors.values()].find(
+      (item) => item.email === "dev-placeholder-doctor@example.com"
+    );
+    expect(cloudinaryMock.upload).not.toHaveBeenCalled();
+    expect(doctor?.image).toContain("data:image/svg+xml");
+  });
+
+  it("creates doctors in development with configured Cloudinary credentials via upload", async () => {
+    backendEnv.env.NODE_ENV = "development";
+    backendEnv.env.CLOUDINARY_NAME = "configured-cloud";
+    backendEnv.env.CLOUDINARY_API_KEY = "configured-key";
+    backendEnv.env.CLOUDINARY_SECRET_KEY = "configured-secret";
+    cloudinaryMock.upload.mockResolvedValue({
+      secure_url: "https://res.cloudinary.com/test/uploaded-doctor.png"
+    });
+
+    await addDoctorRequest("dev-upload-doctor@example.com").expect(201);
+
+    const doctor = [...fakeDb.doctors.values()].find(
+      (item) => item.email === "dev-upload-doctor@example.com"
+    );
+    expect(cloudinaryMock.upload).toHaveBeenCalledTimes(1);
+    expect(doctor?.image).toBe("https://res.cloudinary.com/test/uploaded-doctor.png");
+  });
+
+  it("fails doctor creation in production when Cloudinary credentials are missing", async () => {
+    backendEnv.env.NODE_ENV = "production";
+    backendEnv.env.CLOUDINARY_NAME = "placeholder";
+    backendEnv.env.CLOUDINARY_API_KEY = "";
+    backendEnv.env.CLOUDINARY_SECRET_KEY = "";
+
+    const response = await addDoctorRequest("prod-missing-cloudinary@example.com").expect(500);
+
+    expect(response.body.message).toContain("Cloudinary credentials are not configured");
+    expect(cloudinaryMock.upload).not.toHaveBeenCalled();
+    expect(
+      [...fakeDb.doctors.values()].some(
+        (item) => item.email === "prod-missing-cloudinary@example.com"
+      )
+    ).toBe(false);
   });
 
   it("refreshes with rotation and detects old refresh-token reuse", async () => {
@@ -1861,6 +2087,170 @@ describe("MedFlow backend foundation and Phase 1B authentication", () => {
         .get("/api/admin/patients")
         .set("token", tokenFor(fakeDb.ids.user))
         .expect(401);
+    });
+
+    it("keeps Phase 2C records doctor-authorized and shows only finalized patient-visible records", async () => {
+      const booking = await request(app)
+        .post("/api/user/book-appointment")
+        .set("token", tokenFor(fakeDb.ids.user))
+        .send({ docId: fakeDb.ids.doctor, slotDate: nextAvailableDate(), slotTime: "10:30" })
+        .expect(201);
+      const appointmentId = booking.body.appointment.appointmentId as string;
+
+      await request(app)
+        .post(`/api/doctor/appointments/${appointmentId}/medical-records`)
+        .set("dToken", doctorTokenFor(fakeDb.ids.doctor))
+        .send({
+          type: "consultation_summary",
+          title: "Too early",
+          summary: "This should not save before completion.",
+          details: {},
+          patientVisible: true,
+          status: "finalized"
+        })
+        .expect(409);
+
+      await request(app)
+        .post("/api/doctor/complete-appointment")
+        .set("dToken", doctorTokenFor(fakeDb.ids.doctor))
+        .send({ appointmentId })
+        .expect(200);
+
+      await request(app)
+        .post(`/api/doctor/appointments/${appointmentId}/medical-records`)
+        .set("dToken", doctorTokenFor(fakeDb.ids.otherDoctor))
+        .send({
+          type: "consultation_summary",
+          title: "Unauthorized",
+          summary: "Wrong doctor should not save.",
+          details: {},
+          patientVisible: true,
+          status: "finalized"
+        })
+        .expect(404);
+
+      const draft = await request(app)
+        .post(`/api/doctor/appointments/${appointmentId}/medical-records`)
+        .set("dToken", doctorTokenFor(fakeDb.ids.doctor))
+        .send({
+          type: "treatment_plan",
+          title: "Draft care plan",
+          summary: "Draft plan should stay hidden from the patient timeline.",
+          details: { plan: "Draft only" },
+          patientVisible: true,
+          status: "draft"
+        })
+        .expect(201);
+
+      const finalized = await request(app)
+        .post(`/api/doctor/appointments/${appointmentId}/medical-records`)
+        .set("dToken", doctorTokenFor(fakeDb.ids.doctor))
+        .send({
+          type: "prescription_plan",
+          title: "Final prescription",
+          summary: "Patient-visible finalized prescription.",
+          details: {
+            medicines: [
+              {
+                name: "Amoxicillin",
+                dosage: "500 mg",
+                frequency: "Twice daily",
+                duration: "5 days",
+                instructions: "With food"
+              }
+            ]
+          },
+          patientVisible: true,
+          status: "finalized"
+        })
+        .expect(201);
+
+      const timeline = await request(app)
+        .get("/api/user/medical-timeline")
+        .set("token", tokenFor(fakeDb.ids.user))
+        .expect(200);
+
+      const timelineText = JSON.stringify(timeline.body.timeline);
+      expect(timelineText).toContain("Final prescription");
+      expect(timelineText).not.toContain("Draft care plan");
+      expect(timelineText).not.toContain("Private assigned-doctor note");
+
+      await request(app)
+        .get("/api/admin/medical-records?status=finalized&type=prescription_plan")
+        .set("aToken", adminToken())
+        .expect(200)
+        .expect((response) => {
+          const records = response.body.records as Array<{ _id: string }>;
+          const finalizedRecord = finalized.body.record as { _id: string };
+          const draftRecord = draft.body.record as { _id: string };
+          expect(records.some((record) => record._id === finalizedRecord._id)).toBe(true);
+          expect(records.some((record) => record._id === draftRecord._id)).toBe(false);
+        });
+
+      expect(
+        [...fakeDb.auditLogs.values()].some(
+          (entry) => entry.eventType === "medical_record.created"
+        )
+      ).toBe(true);
+    });
+
+    it("enforces Phase 2C family-member ownership", async () => {
+      const created = await request(app)
+        .post("/api/user/family-members")
+        .set("token", tokenFor(fakeDb.ids.user))
+        .send({
+          name: "Family Contact",
+          relationship: "Sibling",
+          dob: "1998-01-20",
+          phone: "1234567890",
+          email: "family@example.com",
+          emergencyContact: true
+        })
+        .expect(201);
+
+      await request(app)
+        .get("/api/user/family-members")
+        .set("token", tokenFor(fakeDb.ids.user))
+        .expect(200)
+        .expect((response) => {
+          expect(response.body.members).toHaveLength(1);
+          expect(response.body.members[0].linkedAccountId).toBeUndefined();
+          expect(response.body.members[0].consentScope).toContain("No medical-record access");
+        });
+
+      await request(app)
+        .delete(`/api/user/family-members/${created.body.member._id}`)
+        .set("token", tokenFor(fakeDb.ids.otherUser))
+        .expect(404);
+
+      await request(app)
+        .delete(`/api/user/family-members/${created.body.member._id}`)
+        .set("token", tokenFor(fakeDb.ids.user))
+        .expect(200);
+
+      expect(fakeDb.familyMembers.size).toBe(0);
+    });
+
+    it("returns a safe health card QR payload without patient secrets or raw identifiers", async () => {
+      const response = await request(app)
+        .get("/api/user/health-card")
+        .set("token", tokenFor(fakeDb.ids.user))
+        .expect(200);
+
+      expect(response.body.card.cardId).toMatch(/^MF-/);
+      expect(response.body.card.qrPayload).not.toContain(fakeDb.ids.user);
+      expect(response.body.card.qrPayload).not.toContain("patient@example.com");
+      expect(response.body.card.qrPayload).not.toContain("1234567890");
+      expect(response.body.card.qrDataUrl).toContain("data:image/png;base64,");
+
+      await request(app)
+        .get(`/api/user/health-card/lookup/${response.body.card.lookupId}`)
+        .set("token", tokenFor(fakeDb.ids.user))
+        .expect(200)
+        .expect((lookupResponse) => {
+          expect(JSON.stringify(lookupResponse.body.status)).not.toContain("bloodGroup");
+          expect(JSON.stringify(lookupResponse.body.status)).not.toContain(fakeDb.ids.user);
+        });
     });
   });
 

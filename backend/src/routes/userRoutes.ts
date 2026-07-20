@@ -4,11 +4,18 @@ import { loginUser, registerUser } from "../controllers/authController.js";
 import {
   bookAppointment,
   cancelAppointment,
+  addFamilyMember,
+  deleteFamilyMember,
+  familyMembers,
   getHealthProfile,
   getProfile,
+  healthCard,
+  healthCardLookup,
   listAppointment,
+  medicalTimeline,
   paymentRazorpay,
   paymentStripe,
+  patientMedicalRecords,
   updateHealthProfile,
   updateProfile,
   verifyRazorpay,
@@ -28,6 +35,11 @@ import {
   verifyRazorpaySchema,
   verifyStripeSchema
 } from "../validators/userValidators.js";
+import {
+  familyMemberCreateSchema,
+  familyMemberParamsSchema
+} from "../validators/familyMemberValidators.js";
+import { healthCardLookupParamsSchema } from "../validators/medicalRecordValidators.js";
 
 const userRouter = Router();
 
@@ -73,6 +85,46 @@ userRouter.get(
   authUser,
   authorizePermissions("appointments:read"),
   listAppointment
+);
+userRouter.get(
+  "/medical-timeline",
+  authUser,
+  authorizePermissions("users:read", "appointments:read"),
+  medicalTimeline
+);
+userRouter.get(
+  "/medical-records",
+  authUser,
+  authorizePermissions("users:read"),
+  patientMedicalRecords
+);
+userRouter.get(
+  "/family-members",
+  authUser,
+  authorizePermissions("users:read"),
+  familyMembers
+);
+userRouter.post(
+  "/family-members",
+  authUser,
+  authorizePermissions("users:manage"),
+  validateRequest({ body: familyMemberCreateSchema }),
+  addFamilyMember
+);
+userRouter.delete(
+  "/family-members/:familyMemberId",
+  authUser,
+  authorizePermissions("users:manage"),
+  validateRequest({ params: familyMemberParamsSchema }),
+  deleteFamilyMember
+);
+userRouter.get("/health-card", authUser, authorizePermissions("users:read"), healthCard);
+userRouter.get(
+  "/health-card/lookup/:lookupId",
+  authUser,
+  authorizePermissions("users:read"),
+  validateRequest({ params: healthCardLookupParamsSchema }),
+  healthCardLookup
 );
 userRouter.post(
   "/cancel-appointment",

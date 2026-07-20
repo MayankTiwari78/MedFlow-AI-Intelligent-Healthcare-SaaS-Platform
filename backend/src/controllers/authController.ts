@@ -66,10 +66,18 @@ export const registerUser: RequestHandler = asyncHandler(async (req, res) => {
     password: string;
   };
   const result = await registerPatient(name, email, password);
-  sendSuccess(res, 201, "Registration successful. Please verify your email.", {
-    account: result.account,
-    verificationExpiresAt: result.verificationExpiresAt
-  });
+  const data =
+    result.verificationExpiresAt === undefined
+      ? { account: result.account }
+      : { account: result.account, verificationExpiresAt: result.verificationExpiresAt };
+  sendSuccess(
+    res,
+    201,
+    result.account.emailVerified
+      ? "Registration successful."
+      : "Registration successful. Please verify your email.",
+    data
+  );
 });
 
 export const loginUser: RequestHandler = asyncHandler(async (req, res) => {

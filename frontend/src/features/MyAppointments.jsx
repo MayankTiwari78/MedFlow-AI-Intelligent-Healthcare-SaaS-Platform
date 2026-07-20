@@ -5,12 +5,14 @@ import { AppContext } from '../context/AppContext'
 import axios from 'axios'
 import { toast } from 'react-toastify'
 import { assets } from '../assets/assets'
-import AccessPrompt from '../components/AccessPrompt'
+import { isAuthSessionHandledError } from '../api/authClient'
+import { useProtectedPatientRoute } from '../hooks/useProtectedPatientRoute'
 
 const MyAppointments = () => {
 
-    const { backendUrl, token } = useContext(AppContext)
+    const { authStatus, backendUrl, token } = useContext(AppContext)
     const navigate = useNavigate()
+    useProtectedPatientRoute({ authStatus, token })
 
     const [appointments, setAppointments] = useState([])
     const [payment, setPayment] = useState('')
@@ -36,7 +38,7 @@ const MyAppointments = () => {
 
         } catch (error) {
             console.log(error)
-            toast.error(error.message)
+            if (!isAuthSessionHandledError(error)) toast.error(error.message)
         }
     }
 
@@ -56,7 +58,7 @@ const MyAppointments = () => {
 
         } catch (error) {
             console.log(error)
-            toast.error(error.message)
+            if (!isAuthSessionHandledError(error)) toast.error(error.message)
         }
 
     }
@@ -82,7 +84,7 @@ const MyAppointments = () => {
                     }
                 } catch (error) {
                     console.log(error)
-                    toast.error(error.message)
+                    if (!isAuthSessionHandledError(error)) toast.error(error.message)
                 }
             }
         };
@@ -105,7 +107,7 @@ const MyAppointments = () => {
             }
         } catch (error) {
             console.log(error)
-            toast.error(error.message)
+            if (!isAuthSessionHandledError(error)) toast.error(error.message)
         }
     }
 
@@ -121,7 +123,7 @@ const MyAppointments = () => {
             }
         } catch (error) {
             console.log(error)
-            toast.error(error.message)
+            if (!isAuthSessionHandledError(error)) toast.error(error.message)
         }
     }
 
@@ -133,8 +135,12 @@ const MyAppointments = () => {
         }
     }, [token])
 
+    if (authStatus === 'initializing') {
+        return <div className='py-12'><div className='mf-card h-80 animate-pulse bg-[#EAF3F4]' /></div>
+    }
+
     if (!token) {
-        return <AccessPrompt title='Sign in to view appointments' description='Your upcoming and past bookings are protected as part of your patient account.' />
+        return <div className='py-12'><div className='mf-card h-80 animate-pulse bg-[#EAF3F4]' /></div>
     }
 
     return (

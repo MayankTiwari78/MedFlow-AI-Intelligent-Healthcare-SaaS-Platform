@@ -32,9 +32,9 @@ const envSchema = z.object({
     .email("ADMIN_EMAIL must be a valid email")
     .transform((value) => value.toLowerCase()),
   ADMIN_PASSWORD: z.string().min(8, "ADMIN_PASSWORD must be at least 8 characters"),
-  CLOUDINARY_NAME: z.string().trim().min(1, "CLOUDINARY_NAME is required"),
-  CLOUDINARY_API_KEY: z.string().trim().min(1, "CLOUDINARY_API_KEY is required"),
-  CLOUDINARY_SECRET_KEY: z.string().trim().min(1, "CLOUDINARY_SECRET_KEY is required"),
+  CLOUDINARY_NAME: z.string().trim().optional(),
+  CLOUDINARY_API_KEY: z.string().trim().optional(),
+  CLOUDINARY_SECRET_KEY: z.string().trim().optional(),
   RAZORPAY_KEY_ID: z.string().trim().min(1, "RAZORPAY_KEY_ID is required"),
   RAZORPAY_KEY_SECRET: z.string().trim().min(1, "RAZORPAY_KEY_SECRET is required"),
   STRIPE_SECRET_KEY: z.string().trim().min(1, "STRIPE_SECRET_KEY is required"),
@@ -63,7 +63,8 @@ const envSchema = z.object({
   DEFAULT_ORGANIZATION_SLUG: z.string().trim().min(1).default("medflow-default"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
   SERVICE_NAME: z.string().trim().min(1).default("medflow-backend"),
-  ENABLE_API_DOCS: booleanFromEnv.default(false)
+  ENABLE_API_DOCS: booleanFromEnv.default(false),
+  DEVELOPMENT_AUTO_VERIFY_EMAIL: z.string().default("false")
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
@@ -74,6 +75,18 @@ if (!parsedEnv.success) {
   );
   throw new Error(`Invalid backend environment configuration: ${messages.join("; ")}`);
 }
+
+const isPlaceholderValue = (value: string | undefined): boolean => {
+  const normalized = value?.trim().toLowerCase();
+  return (
+    !normalized ||
+    normalized === "placeholder" ||
+    normalized.startsWith("replace-with-") ||
+    normalized.includes("replace_with")
+  );
+};
+
+const hasConfiguredValue = (value: string | undefined): boolean => !isPlaceholderValue(value);
 
 const productionMissingFields = [
   ["JWT_ACCESS_SECRET", parsedEnv.data.JWT_ACCESS_SECRET],
@@ -93,6 +106,20 @@ if (parsedEnv.data.NODE_ENV === "production" && productionMissingFields.length >
   );
 }
 
+const productionInvalidCloudinaryFields = [
+  ["CLOUDINARY_NAME", parsedEnv.data.CLOUDINARY_NAME],
+  ["CLOUDINARY_API_KEY", parsedEnv.data.CLOUDINARY_API_KEY],
+  ["CLOUDINARY_SECRET_KEY", parsedEnv.data.CLOUDINARY_SECRET_KEY]
+].filter(([, value]) => !hasConfiguredValue(value));
+
+if (parsedEnv.data.NODE_ENV === "production" && productionInvalidCloudinaryFields.length > 0) {
+  throw new Error(
+    `Invalid backend environment configuration: production requires valid ${productionInvalidCloudinaryFields
+      .map(([key]) => key)
+      .join(", ")}`
+  );
+}
+
 if (
   parsedEnv.data.NODE_ENV === "production" &&
   parsedEnv.data.JWT_ACCESS_SECRET === parsedEnv.data.JWT_REFRESH_SECRET
@@ -104,6 +131,9 @@ if (
 
 export const env = {
   ...parsedEnv.data,
+  CLOUDINARY_NAME: parsedEnv.data.CLOUDINARY_NAME ?? "",
+  CLOUDINARY_API_KEY: parsedEnv.data.CLOUDINARY_API_KEY ?? "",
+  CLOUDINARY_SECRET_KEY: parsedEnv.data.CLOUDINARY_SECRET_KEY ?? "",
   JWT_ACCESS_SECRET: parsedEnv.data.JWT_ACCESS_SECRET ?? parsedEnv.data.JWT_SECRET,
   JWT_REFRESH_SECRET:
     parsedEnv.data.JWT_REFRESH_SECRET ?? `${parsedEnv.data.JWT_SECRET}-refresh-development-only`,
