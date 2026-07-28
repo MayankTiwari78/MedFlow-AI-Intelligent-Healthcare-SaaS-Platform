@@ -1,0 +1,9 @@
+⚠ Port 3000 is in use by process 8672, using available port 3001 instead.
+⨯ Another next dev server is already running.
+
+- Local:        http://localhost:3000
+- PID:          8672
+- Dir:          C:\Users\HP\hospital managamenet\Prescripto-Hospital_Management_System\frontend
+- Log:          .next\dev\logs\next-development.log
+
+Run taskkill /PID 8672 /F to stop it.

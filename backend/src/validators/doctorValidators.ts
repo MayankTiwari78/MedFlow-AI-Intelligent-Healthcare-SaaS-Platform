@@ -55,3 +55,5 @@ export const clinicalNotesParamsSchema = z.object({ appointmentId: objectIdSchem
 export const updateClinicalNotesSchema = z.object({
   clinicalNotes: z.string().trim().max(5000)
 });
+export const queueQuerySchema = z.object({ slotDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/) });
+export const followUpSchema = z.object({ recommendedDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/), reason: z.string().trim().min(2).max(500) });

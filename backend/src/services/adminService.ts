@@ -61,7 +61,8 @@ export const cancelAdminAppointment = async (
   await AppointmentModel.findByIdAndUpdate(appointmentId, {
     status: "cancelled",
     cancelled: true,
-    isCompleted: false
+    isCompleted: false,
+    activeSlot: false
   });
   await releaseAppointmentSlot(appointment.docId, appointment.slotDate, appointment.slotTime);
 };
@@ -211,7 +212,8 @@ export const updateAdminAppointmentStatus = async (
   await AppointmentModel.findByIdAndUpdate(appointmentId, {
     status,
     cancelled: status === "cancelled",
-    isCompleted: status === "completed"
+    isCompleted: status === "completed",
+    activeSlot: false
   });
   if (status === "cancelled") {
     await releaseAppointmentSlot(appointment.docId, appointment.slotDate, appointment.slotTime);
@@ -246,6 +248,19 @@ export const getAdminDashboard = async (
     doctors: doctors.length,
     appointments: appointments.length,
     patients: users.length,
-    latestAppointments: appointments
+    latestAppointments: appointments,
+    queueSummary: appointments
+      .filter((appointment) => ["checked_in", "in_consultation"].includes(getAppointmentStatus(appointment)))
+      .reduce<Record<string, { doctorName: string; waiting: number; inConsultation: number }>>((summary, appointment) => {
+        const item = summary[appointment.docId] ?? {
+          doctorName: appointment.docData?.name || "Assigned clinician",
+          waiting: 0,
+          inConsultation: 0
+        };
+        if (getAppointmentStatus(appointment) === "checked_in") item.waiting += 1;
+        if (getAppointmentStatus(appointment) === "in_consultation") item.inConsultation += 1;
+        summary[appointment.docId] = item;
+        return summary;
+      }, {})
   };
 };

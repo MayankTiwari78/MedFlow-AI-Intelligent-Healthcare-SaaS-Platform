@@ -4,8 +4,8 @@ import { useContext, useEffect } from 'react'
 import { toast } from 'react-toastify'
 import { DoctorContext } from '../../context/DoctorContext'
 import { AppContext } from '../../context/AppContext'
-import { assets } from '../../assets/assets'
 import { isAuthSessionHandledError } from '../../api/authClient'
+import DoctorAppointmentLifecycleControls from './AppointmentLifecycleControls'
 
 const emptyRecordDraft = {
   type: 'consultation_summary',
@@ -25,10 +25,11 @@ const emptyRecordDraft = {
 
 const DoctorAppointments = () => {
 
-  const { dToken, backendUrl, appointments, getAppointments, cancelAppointment, completeAppointment, updateClinicalNotes } = useContext(DoctorContext)
+  const { dToken, backendUrl, appointments, getAppointments, cancelAppointment, runOperationalAppointmentAction, updateClinicalNotes } = useContext(DoctorContext)
   const { slotDateFormat, calculateAge, currency } = useContext(AppContext)
   const [noteDrafts, setNoteDrafts] = useState({})
   const [recordDrafts, setRecordDrafts] = useState({})
+  const [followUps, setFollowUps] = useState({})
 
   useEffect(() => {
     if (dToken) {
@@ -68,6 +69,11 @@ const DoctorAppointments = () => {
     }
   }
 
+  const markNoShow = (appointmentId) => runOperationalAppointmentAction({
+    endpoint: '/api/doctor/no-show',
+    payload: { appointmentId }
+  })
+
   return (
     <main className='portal-page'>
 
@@ -98,21 +104,14 @@ const DoctorAppointments = () => {
               <p className='max-sm:hidden'>{calculateAge(item.userData.dob)}</p>
               <p>{slotDateFormat(item.slotDate)}, {item.slotTime}</p>
               <p>{currency}{item.amount}</p>
-              {item.cancelled
-                ? <p className='portal-status bg-red-50 text-red-700'>Cancelled</p>
-                : item.isCompleted
-                  ? <p className='portal-status bg-emerald-50 text-emerald-700'>Completed</p>
-                  : <div className='flex'>
-                    <img onClick={() => cancelAppointment(item._id)} className='w-10 cursor-pointer' src={assets.cancel_icon} alt="" />
-                    <img onClick={() => completeAppointment(item._id)} className='w-10 cursor-pointer' src={assets.tick_icon} alt="" />
-                  </div>
-              }
+              <DoctorAppointmentLifecycleControls appointment={item} onTransition={runOperationalAppointmentAction} onCancel={cancelAppointment} onNoShow={markNoShow} />
             </div>
             <div className='grid gap-3 px-6 pb-4 sm:grid-cols-[1fr_auto] sm:items-end'>
               <label className='portal-label'>Clinical notes<textarea className='portal-field mt-1 min-h-20 resize-y' value={noteDrafts[item._id] ?? item.clinicalNotes ?? ''} onChange={(event) => setNoteDrafts((current) => ({ ...current, [item._id]: event.target.value }))} maxLength={5000} /></label>
               <button type='button' className='portal-button-secondary' onClick={() => updateClinicalNotes(item._id, noteDrafts[item._id] ?? item.clinicalNotes ?? '')}>Save notes</button>
             </div>
             {item.isCompleted && <div className='border-t border-line px-6 py-4'>
+              <div className='mb-4 grid gap-2 sm:grid-cols-[1fr_2fr_auto]'><input className='portal-field' type='date' value={followUps[item._id]?.date || ''} onChange={(event) => setFollowUps((current) => ({ ...current, [item._id]: { ...(current[item._id] || {}), date: event.target.value } }))} /><input className='portal-field' placeholder='Follow-up reason' value={followUps[item._id]?.reason || ''} onChange={(event) => setFollowUps((current) => ({ ...current, [item._id]: { ...(current[item._id] || {}), reason: event.target.value } }))} /><button type='button' className='portal-button-secondary' onClick={() => runOperationalAppointmentAction({ endpoint: `/api/doctor/appointments/${item._id}/follow-up`, payload: { recommendedDate: followUps[item._id]?.date, reason: followUps[item._id]?.reason } })}>Recommend follow-up</button></div>
               <p className='portal-eyebrow'>Patient-visible medical record</p>
               <p className='mt-1 text-xs text-slate-500'>Private clinical notes stay separate. Save a finalized record only when it should appear in the patient timeline.</p>
               <div className='mt-4 grid gap-3 lg:grid-cols-4'>

@@ -16,8 +16,17 @@ export const bookAppointmentSchema = z.object({
     .string()
     .trim()
     .regex(/^(?:\d{4}-\d{2}-\d{2}|\d{1,2}_\d{1,2}_\d{4})$/, "Invalid slot date"),
+  slotTime: z.string().trim().regex(/^\d{2}:\d{2}$/, "Invalid slot time"),
+  followUpAppointmentId: objectIdSchema.optional()
+});
+
+export const rescheduleAppointmentSchema = z.object({
+  appointmentId: objectIdSchema,
+  slotDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid slot date"),
   slotTime: z.string().trim().regex(/^\d{2}:\d{2}$/, "Invalid slot time")
 });
+export const reminderParamsSchema = z.object({ reminderId: objectIdSchema });
+export const appointmentParamsSchema = z.object({ appointmentId: objectIdSchema });
 
 const optionalDateSchema = z
   .string()

@@ -766,6 +766,24 @@ export const openApiDocument = {
         security: [{ bearerAuth: [] }, { legacyAdminToken: [] }],
         responses: { "200": { description: "Private clinical notes" } }
       }
+    },
+    "/api/user/reminders": {
+      get: { tags: ["Patients"], summary: "List the current patient's in-app reminders", security: [{ bearerAuth: [] }, { legacyUserToken: [] }], responses: { "200": { description: "Tenant-scoped reminder records" } } }
+    },
+    "/api/user/appointments/{appointmentId}/queue": {
+      get: { tags: ["Patients"], summary: "Get private queue status for an owned appointment", security: [{ bearerAuth: [] }, { legacyUserToken: [] }], responses: { "200": { description: "The patient's token and position only" }, "404": { $ref: "#/components/responses/NotFound" } } }
+    },
+    "/api/doctor/check-in": {
+      post: { tags: ["Doctors"], summary: "Check in an assigned scheduled appointment and allocate a queue token", security: [{ bearerAuth: [] }, { legacyDoctorToken: [] }], responses: { "200": { description: "Checked in appointment" }, "409": { description: "Invalid lifecycle transition" } } }
+    },
+    "/api/doctor/queue": {
+      get: { tags: ["Doctors"], summary: "List the doctor's queue for one date", security: [{ bearerAuth: [] }, { legacyDoctorToken: [] }], responses: { "200": { description: "Ordered operational queue" } } }
+    },
+    "/api/doctor/queue/call-next": {
+      post: { tags: ["Doctors"], summary: "Call the earliest waiting patient", security: [{ bearerAuth: [] }, { legacyDoctorToken: [] }], responses: { "200": { description: "Patient moved into consultation" } } }
+    },
+    "/api/doctor/appointments/{appointmentId}/follow-up": {
+      post: { tags: ["Doctors"], summary: "Recommend a follow-up after a completed appointment", security: [{ bearerAuth: [] }, { legacyDoctorToken: [] }], responses: { "200": { description: "Follow-up and internal reminder created" } } }
     }
   }
 } as const;

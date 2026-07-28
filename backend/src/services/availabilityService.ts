@@ -106,7 +106,7 @@ export const assertBookableDoctorSlot = async (
     docId: String(doctor._id),
     slotDate,
     slotTime: requestedTime,
-    status: "scheduled"
+    status: { $in: ["scheduled", "checked_in", "in_consultation"] }
   });
   if (existing) throw new AppError("Slot is no longer available", 409);
 
@@ -129,7 +129,7 @@ export const listDoctorAvailableSlots = async (
   const appointments = await AppointmentModel.find({ docId: doctorId });
   const booked = new Set(
     appointments
-      .filter((appointment) => getAppointmentStatus(appointment) === "scheduled")
+      .filter((appointment) => ["scheduled", "checked_in", "in_consultation"].includes(getAppointmentStatus(appointment)))
       .map((appointment) => `${normalizeSlotDate(appointment.slotDate)}|${appointment.slotTime}`)
   );
 

@@ -15,6 +15,8 @@ const AdminContextProvider = ({ children }) => {
   const [appointments, setAppointments] = useState([]);
   const [doctors, setDoctors] = useState([]);
   const [dashData, setDashData] = useState(false);
+  const [dashboardState, setDashboardState] = useState("idle");
+  const [dashboardError, setDashboardError] = useState("");
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -82,11 +84,17 @@ const AdminContextProvider = ({ children }) => {
   );
 
   const getDashData = useCallback(async () => {
+    if (!aToken) return;
+    setDashboardState("loading");
+    setDashboardError("");
     try {
       const { data } = await axios.get(`${backendUrl}/api/admin/dashboard`, { headers: { aToken } });
-      if (data.success) setDashData(data.dashData);
-      else toast.error(data.message);
+      if (data.success) { setDashData(data.dashData); setDashboardState("ready"); }
+      else { setDashData(false); setDashboardError(data.message || "The dashboard is unavailable."); setDashboardState("error"); }
     } catch (error) {
+      setDashData(false);
+      setDashboardError(error.response?.data?.message || "We could not load the dashboard. Check the service and retry.");
+      setDashboardState("error");
       if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message || "Unable to load dashboard");
     }
   }, [aToken, backendUrl]);
@@ -103,7 +111,9 @@ const AdminContextProvider = ({ children }) => {
         getAllAppointments,
         getDashData,
         cancelAppointment,
-        dashData
+        dashData,
+        dashboardState,
+        dashboardError
       }}
     >
       {children}

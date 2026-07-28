@@ -90,6 +90,8 @@ const fakeDb = vi.hoisted(() => {
   const authSecurity = new Map<string, RecordData>();
   const medicalRecords = new Map<string, RecordData>();
   const familyMembers = new Map<string, RecordData>();
+  const queueCounters = new Map<string, RecordData>();
+  const reminders = new Map<string, RecordData>();
 
   const makeId = () => counter.toString(16).padStart(24, "0");
 
@@ -174,13 +176,28 @@ const fakeDb = vi.hoisted(() => {
       return valueMatches(doc, key, value);
     });
 
+  const setByPath = (doc: RecordData, key: string, value: unknown): void => {
+    const parts = key.split(".");
+    const leaf = parts.pop()!;
+    const parent = parts.reduce<Record<string, any>>((current, part) => {
+      current[part] ??= {};
+      return current[part];
+    }, doc);
+    parent[leaf] = value;
+  };
+
   const applyUpdate = (doc: RecordData, update: QueryFilter): void => {
     if ("$set" in update && typeof update.$set === "object") {
-      Object.assign(doc, update.$set);
-      return;
+      for (const [key, value] of Object.entries(update.$set as QueryFilter)) setByPath(doc, key, value);
     }
-
-    Object.assign(doc, update);
+    if ("$inc" in update && typeof update.$inc === "object") {
+      for (const [key, value] of Object.entries(update.$inc as QueryFilter)) {
+        setByPath(doc, key, Number(getByPath(doc, key) ?? 0) + Number(value));
+      }
+    }
+    for (const [key, value] of Object.entries(update)) {
+      if (!key.startsWith("$")) setByPath(doc, key, value);
+    }
   };
 
   const stripSelectedFields = (value: any, select?: string): any => {
@@ -387,6 +404,14 @@ const fakeDb = vi.hoisted(() => {
       return Promise.resolve(doc ?? null);
     }
 
+    public static findOneAndUpdate(filter: QueryFilter, update: QueryFilter) {
+      return findOneAndUpdate(appointments, filter, update);
+    }
+
+    public static countDocuments(filter: QueryFilter) {
+      return Promise.resolve([...appointments.values()].filter((appointment) => matches(appointment, filter)).length);
+    }
+
     public static find(filter: QueryFilter = {}) {
       return query(
         [...appointments.values()].filter((appointment) => matches(appointment, filter))
@@ -581,6 +606,35 @@ const fakeDb = vi.hoisted(() => {
     }
   }
 
+  class QueueCounterModel {
+    public static findOneAndUpdate(filter: QueryFilter, update: QueryFilter, options: QueryFilter = {}) {
+      const key = `${filter.organizationId ?? ""}:${filter.docId}:${filter.slotDate}`;
+      let counterRecord = [...queueCounters.values()].find((counter) => matches(counter, filter));
+      if (!counterRecord && options.upsert) {
+        counterRecord = new FakeDocument({ ...filter, ...(update.$setOnInsert as QueryFilter | undefined) }) as RecordData;
+        queueCounters.set(key, counterRecord);
+      }
+      if (counterRecord) applyUpdate(counterRecord, update);
+      return Promise.resolve(counterRecord ?? null);
+    }
+  }
+
+  class ReminderModel extends FakeDocument {
+    public static findOneAndUpdate(filter: QueryFilter, update: QueryFilter, options: QueryFilter = {}) {
+      let reminder = [...reminders.values()].find((item) => matches(item, filter));
+      if (!reminder && options.upsert) {
+        reminder = new ReminderModel({ ...filter }) as RecordData;
+        reminders.set(reminder._id, reminder);
+      }
+      if (reminder) applyUpdate(reminder, update);
+      return Promise.resolve(reminder ?? null);
+    }
+
+    public static find(filter: QueryFilter = {}) {
+      return query([...reminders.values()].filter((reminder) => matches(reminder, filter)));
+    }
+  }
+
   const patientPassword = "PatientPass12!";
   const doctorPassword = "DoctorPass12!";
 
@@ -596,6 +650,8 @@ const fakeDb = vi.hoisted(() => {
     authSecurity.clear();
     medicalRecords.clear();
     familyMembers.clear();
+    queueCounters.clear();
+    reminders.clear();
     counter = 10;
 
     organizations.set(
@@ -849,6 +905,8 @@ const fakeDb = vi.hoisted(() => {
     authSecurity,
     medicalRecords,
     familyMembers,
+    queueCounters,
+    reminders,
     patientPassword,
     doctorPassword,
     UserModel,
@@ -861,7 +919,9 @@ const fakeDb = vi.hoisted(() => {
     AuditLogModel,
     AuthSecurityModel,
     MedicalRecordModel,
-    FamilyMemberModel
+    FamilyMemberModel,
+    QueueCounterModel,
+    ReminderModel
   };
 });
 
@@ -890,6 +950,8 @@ vi.mock("../src/models/MedicalRecord.js", () => ({
   MEDICAL_RECORD_STATUSES: ["draft", "finalized"]
 }));
 vi.mock("../src/models/FamilyMember.js", () => ({ default: fakeDb.FamilyMemberModel }));
+vi.mock("../src/models/QueueCounter.js", () => ({ default: fakeDb.QueueCounterModel }));
+vi.mock("../src/models/Reminder.js", () => ({ default: fakeDb.ReminderModel }));
 vi.mock("bcrypt", () => ({
   default: {
     hash: vi.fn(async (password: string) => `hashed:${password}`),
@@ -924,9 +986,9 @@ describe("MedFlow backend foundation and Phase 1B authentication", () => {
       `${process.env.ADMIN_EMAIL as string}${process.env.ADMIN_PASSWORD as string}`,
       process.env.JWT_SECRET as string
     );
-  const nextAvailableDate = (): string => {
+  const nextAvailableDate = (daysAhead = 1): string => {
     const date = new Date();
-    date.setDate(date.getDate() + 1);
+    date.setDate(date.getDate() + daysAhead);
     if (date.getDay() === 0) date.setDate(date.getDate() + 1);
     return [
       date.getFullYear(),
@@ -2045,7 +2107,7 @@ describe("MedFlow backend foundation and Phase 1B authentication", () => {
         .expect(401);
     });
 
-    it("lets the assigned doctor complete a scheduled appointment once", async () => {
+    it("requires the assigned doctor to use the checked-in consultation lifecycle", async () => {
       const booking = await request(app)
         .post("/api/user/book-appointment")
         .set("token", tokenFor(fakeDb.ids.user))
@@ -2057,12 +2119,22 @@ describe("MedFlow backend foundation and Phase 1B authentication", () => {
         .post("/api/doctor/complete-appointment")
         .set("dToken", doctorTokenFor(fakeDb.ids.doctor))
         .send({ appointmentId })
+        .expect(409);
+      await request(app)
+        .post("/api/doctor/check-in")
+        .set("dToken", doctorTokenFor(fakeDb.ids.doctor))
+        .send({ appointmentId })
+        .expect(200);
+      await request(app)
+        .post("/api/doctor/queue/call-next")
+        .set("dToken", doctorTokenFor(fakeDb.ids.doctor))
+        .send({ slotDate: booking.body.appointment.slotDate })
         .expect(200);
       await request(app)
         .post("/api/doctor/complete-appointment")
         .set("dToken", doctorTokenFor(fakeDb.ids.doctor))
         .send({ appointmentId })
-        .expect(409);
+        .expect(200);
       expect(fakeDb.appointments.get(appointmentId)?.status).toBe("completed");
     });
 
@@ -2110,6 +2182,16 @@ describe("MedFlow backend foundation and Phase 1B authentication", () => {
         })
         .expect(409);
 
+      await request(app)
+        .post("/api/doctor/check-in")
+        .set("dToken", doctorTokenFor(fakeDb.ids.doctor))
+        .send({ appointmentId })
+        .expect(200);
+      await request(app)
+        .post("/api/doctor/queue/call-next")
+        .set("dToken", doctorTokenFor(fakeDb.ids.doctor))
+        .send({ slotDate: booking.body.appointment.slotDate })
+        .expect(200);
       await request(app)
         .post("/api/doctor/complete-appointment")
         .set("dToken", doctorTokenFor(fakeDb.ids.doctor))
@@ -2251,6 +2333,52 @@ describe("MedFlow backend foundation and Phase 1B authentication", () => {
           expect(JSON.stringify(lookupResponse.body.status)).not.toContain("bloodGroup");
           expect(JSON.stringify(lookupResponse.body.status)).not.toContain(fakeDb.ids.user);
         });
+    });
+  });
+
+  describe("Phase 3 smart hospital operations", () => {
+    it("allocates unique doctor/day queue tokens and keeps a patient's queue private", async () => {
+      const slotDate = nextAvailableDate();
+      const first = await request(app).post("/api/user/book-appointment").set("token", tokenFor(fakeDb.ids.user)).send({ docId: fakeDb.ids.doctor, slotDate, slotTime: "10:00" }).expect(201);
+      const second = await request(app).post("/api/user/book-appointment").set("token", tokenFor(fakeDb.ids.otherUser)).send({ docId: fakeDb.ids.doctor, slotDate, slotTime: "10:30" }).expect(201);
+      const firstId = first.body.appointment.appointmentId as string;
+      const secondId = second.body.appointment.appointmentId as string;
+
+      await request(app).post("/api/doctor/check-in").set("dToken", doctorTokenFor(fakeDb.ids.otherDoctor)).send({ appointmentId: firstId }).expect(404);
+      await request(app).post("/api/doctor/check-in").set("dToken", doctorTokenFor(fakeDb.ids.doctor)).send({ appointmentId: firstId }).expect(200);
+      await request(app).post("/api/doctor/check-in").set("dToken", doctorTokenFor(fakeDb.ids.doctor)).send({ appointmentId: secondId }).expect(200);
+
+      expect(fakeDb.appointments.get(firstId)?.queueToken).toBe(1);
+      expect(fakeDb.appointments.get(secondId)?.queueToken).toBe(2);
+      const ownQueue = await request(app).get(`/api/user/appointments/${firstId}/queue`).set("token", tokenFor(fakeDb.ids.user)).expect(200);
+      expect(ownQueue.body.queue.position).toBe(1);
+      expect(JSON.stringify(ownQueue.body.queue)).not.toContain(secondId);
+      await request(app).get(`/api/user/appointments/${firstId}/queue`).set("token", tokenFor(fakeDb.ids.otherUser)).expect(404);
+      expect([...fakeDb.auditLogs.values()].some((entry) => entry.eventType === "appointment.checked_in")).toBe(true);
+    });
+
+    it("rejects a collision-safe reschedule without changing the original appointment", async () => {
+      const slotDate = nextAvailableDate();
+      const current = await request(app).post("/api/user/book-appointment").set("token", tokenFor(fakeDb.ids.user)).send({ docId: fakeDb.ids.doctor, slotDate, slotTime: "10:00" }).expect(201);
+      await request(app).post("/api/user/book-appointment").set("token", tokenFor(fakeDb.ids.otherUser)).send({ docId: fakeDb.ids.doctor, slotDate, slotTime: "10:30" }).expect(201);
+      const currentId = current.body.appointment.appointmentId as string;
+      await request(app).post(`/api/user/appointments/${currentId}/reschedule`).set("token", tokenFor(fakeDb.ids.user)).send({ appointmentId: currentId, slotDate, slotTime: "10:30" }).expect(409);
+      expect(fakeDb.appointments.get(currentId)?.status).toBe("scheduled");
+    });
+
+    it("links an owned follow-up booking and audits the clinical operations", async () => {
+      const slotDate = nextAvailableDate();
+      const booking = await request(app).post("/api/user/book-appointment").set("token", tokenFor(fakeDb.ids.user)).send({ docId: fakeDb.ids.doctor, slotDate, slotTime: "11:00" }).expect(201);
+      const appointmentId = booking.body.appointment.appointmentId as string;
+      await request(app).post("/api/doctor/check-in").set("dToken", doctorTokenFor(fakeDb.ids.doctor)).send({ appointmentId }).expect(200);
+      await request(app).post("/api/doctor/queue/call-next").set("dToken", doctorTokenFor(fakeDb.ids.doctor)).send({ slotDate }).expect(200);
+      await request(app).post(`/api/doctor/appointments/${appointmentId}/complete-operational`).set("dToken", doctorTokenFor(fakeDb.ids.doctor)).send({}).expect(200);
+      const recommendedDate = nextAvailableDate(7);
+      await request(app).post(`/api/doctor/appointments/${appointmentId}/follow-up`).set("dToken", doctorTokenFor(fakeDb.ids.doctor)).send({ recommendedDate, reason: "Review recovery" }).expect(200);
+      await request(app).post("/api/user/book-appointment").set("token", tokenFor(fakeDb.ids.otherUser)).send({ docId: fakeDb.ids.doctor, slotDate: recommendedDate, slotTime: "10:00", followUpAppointmentId: appointmentId }).expect(404);
+      const followUp = await request(app).post("/api/user/book-appointment").set("token", tokenFor(fakeDb.ids.user)).send({ docId: fakeDb.ids.doctor, slotDate: recommendedDate, slotTime: "10:00", followUpAppointmentId: appointmentId }).expect(201);
+      expect(fakeDb.appointments.get(appointmentId)?.followUp.scheduledAppointmentId).toBe(followUp.body.appointment.appointmentId);
+      expect([...fakeDb.auditLogs.values()].some((entry) => entry.eventType === "appointment.follow_up.recommended")).toBe(true);
     });
   });
 

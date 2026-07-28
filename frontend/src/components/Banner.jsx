@@ -7,15 +7,15 @@ const Banner = () => {
     const navigate = useNavigate()
 
     return (
-        <section className='relative flex overflow-hidden rounded-lg bg-ink px-6 sm:px-10 md:px-14 lg:px-12'>
+        <section className='relative flex overflow-hidden rounded-2xl bg-ink px-6 sm:px-10 md:px-14 lg:px-12'>
 
             {/* ------- Left Side ------- */}
             <div className='flex-1 py-8 sm:py-10 md:py-16 lg:py-24 lg:pl-5'>
                 <div className='text-xl sm:text-2xl md:text-3xl lg:text-5xl font-semibold text-white'>
-                    <p>Make your next appointment</p>
-                    <p className='mt-2 text-[#9CE5DE]'>with confidence.</p>
+                    <p>Ready to take the</p>
+                    <p className='mt-2 text-[#9CE5DE]'>next step in care?</p>
                 </div>
-                <button onClick={() => { navigate('/login'); scrollTo(0, 0) }} className='mf-button-secondary border-white bg-white mt-6'>Create your account</button>
+                <button onClick={() => { navigate('/doctors'); window.scrollTo(0, 0) }} className='mf-button-secondary border-white bg-white mt-6'>Explore clinicians</button>
             </div>
 
             {/* ------- Right Side ------- */}

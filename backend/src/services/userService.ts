@@ -195,6 +195,7 @@ export const bookPatientAppointment = async (
       status: "scheduled",
       cancelled: false,
       isCompleted: false,
+      activeSlot: true,
       date: Date.now()
     }).save();
 
@@ -239,7 +240,8 @@ export const cancelPatientAppointment = async (
   await AppointmentModel.findByIdAndUpdate(appointmentId, {
     status: "cancelled",
     cancelled: true,
-    isCompleted: false
+    isCompleted: false,
+    activeSlot: false
   });
   await releaseDoctorSlot(appointment.docId, appointment.slotDate, appointment.slotTime);
 };

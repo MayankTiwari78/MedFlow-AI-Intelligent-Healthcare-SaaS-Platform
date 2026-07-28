@@ -79,7 +79,8 @@ export const cancelDoctorAppointment = async (
   await AppointmentModel.findByIdAndUpdate(appointmentId, {
     status: "cancelled",
     cancelled: true,
-    isCompleted: false
+    isCompleted: false,
+    activeSlot: false
   });
   await releaseAppointmentSlot(appointment.docId, appointment.slotDate, appointment.slotTime);
 };

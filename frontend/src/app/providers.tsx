@@ -10,9 +10,9 @@ import AppContextProvider from "../context/AppContext";
 export const Providers = ({ children }: { children: ReactNode }) => (
   <AppContextProvider>
     <ToastContainer />
-    <div className="mx-4 sm:mx-[10%]">
+    <div className="min-h-screen overflow-x-hidden">
       <Navbar />
-      {children}
+      <div className="mf-page min-h-[calc(100vh-22rem)] py-8 sm:py-10">{children}</div>
       <Footer />
     </div>
   </AppContextProvider>

@@ -5,7 +5,7 @@ import { AppContext } from '../../context/AppContext'
 
 const Dashboard = () => {
 
-  const { aToken, getDashData, cancelAppointment, dashData } = useContext(AdminContext)
+  const { aToken, getDashData, cancelAppointment, dashData, dashboardState, dashboardError } = useContext(AdminContext)
   const { slotDateFormat } = useContext(AppContext)
 
   useEffect(() => {
@@ -14,7 +14,10 @@ const Dashboard = () => {
     }
   }, [aToken])
 
-  return dashData && (
+  if (dashboardState === 'loading' || (aToken && !dashData && dashboardState === 'idle')) return <main className='portal-page'><div className='portal-card h-72 animate-pulse bg-mist' aria-label='Loading dashboard' /></main>
+  if (dashboardState === 'error') return <main className='portal-page'><section className='portal-card p-8 text-center'><h1 className='portal-title'>Dashboard unavailable</h1><p className='mt-2 text-slate-600'>{dashboardError}</p><button type='button' className='portal-button mt-5' onClick={getDashData}>Retry</button></section></main>
+  if (!dashData) return <main className='portal-page'><section className='portal-card p-8 text-center'><h1 className='portal-title'>No dashboard data yet</h1><p className='mt-2 text-slate-600'>Sign in again or retry when your account is ready.</p><button type='button' className='portal-button mt-5' onClick={getDashData}>Retry</button></section></main>
+  return (
     <main className='portal-page'>
       <div><p className='portal-eyebrow'>Operations overview</p><h1 className='portal-title'>Hospital dashboard</h1><p className='mt-2 text-slate-600'>A focused view of clinicians, patient demand, and the latest booking activity.</p></div>
 
@@ -58,6 +61,15 @@ const Dashboard = () => {
               {item.cancelled ? <p className='portal-status bg-red-50 text-red-700'>Cancelled</p> : item.isCompleted ? <p className='portal-status bg-emerald-50 text-emerald-700'>Completed</p> : <img onClick={() => cancelAppointment(item._id)} className='w-9 cursor-pointer' src={assets.cancel_icon} alt="Cancel appointment" />}
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className='portal-card p-5'>
+        <p className='portal-eyebrow'>Live operations</p>
+        <h2 className='mt-1 text-lg font-semibold text-ink'>Active queues</h2>
+        <div className='mt-4 grid gap-3 md:grid-cols-2'>
+          {Object.values(dashData.queueSummary || {}).map((queue) => <div key={queue.doctorName} className='rounded-lg border border-line bg-mist p-4'><p className='font-semibold text-ink'>{queue.doctorName}</p><p className='mt-1 text-sm text-slate-600'>{queue.waiting} waiting · {queue.inConsultation} in consultation</p></div>)}
+          {Object.keys(dashData.queueSummary || {}).length === 0 && <p className='text-sm text-slate-500'>No patients are currently checked in.</p>}
         </div>
       </section>
 

@@ -114,7 +114,9 @@ const DoctorProfile = () => {
         }
     }, [dToken])
 
-    return profileData && (
+    if (!profileData) return <main className='portal-page'><section className='portal-card p-8 text-center'><h1 className='portal-title'>Profile loading</h1><p className='mt-2 text-slate-600'>Your profile is loading. If it does not appear, retry the request.</p><button type='button' className='portal-button mt-5' onClick={getProfileData}>Retry</button></section></main>
+
+    return (
         <main className='portal-page'>
             <div><p className='portal-eyebrow'>Clinical identity</p><h1 className='portal-title'>Professional profile</h1><p className='mt-2 text-slate-600'>Maintain the information patients see when reviewing availability.</p></div>
             <div className='grid gap-5 lg:grid-cols-[260px_1fr]'>

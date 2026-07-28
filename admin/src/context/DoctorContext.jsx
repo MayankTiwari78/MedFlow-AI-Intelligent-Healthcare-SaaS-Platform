@@ -14,6 +14,8 @@ const DoctorContextProvider = ({ children }) => {
   const [dToken, setDToken] = useState("");
   const [appointments, setAppointments] = useState([]);
   const [dashData, setDashData] = useState(false);
+  const [dashboardState, setDashboardState] = useState("idle");
+  const [dashboardError, setDashboardError] = useState("");
   const [profileData, setProfileData] = useState(false);
 
   useEffect(() => {
@@ -43,11 +45,17 @@ const DoctorContextProvider = ({ children }) => {
   }, [backendUrl, dToken]);
 
   const getDashData = useCallback(async () => {
+    if (!dToken) return;
+    setDashboardState("loading");
+    setDashboardError("");
     try {
       const { data } = await axios.get(`${backendUrl}/api/doctor/dashboard`, { headers: { dToken } });
-      if (data.success) setDashData(data.dashData);
-      else toast.error(data.message);
+      if (data.success) { setDashData(data.dashData); setDashboardState("ready"); }
+      else { setDashData(false); setDashboardError(data.message || "The dashboard is unavailable."); setDashboardState("error"); }
     } catch (error) {
+      setDashData(false);
+      setDashboardError(error.response?.data?.message || "We could not load the dashboard. Check the service and retry.");
+      setDashboardState("error");
       if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message || "Unable to load dashboard");
     }
   }, [backendUrl, dToken]);
@@ -75,9 +83,19 @@ const DoctorContextProvider = ({ children }) => {
     (appointmentId) => updateAppointment("/api/doctor/cancel-appointment", appointmentId, "Unable to cancel appointment"),
     [updateAppointment]
   );
-  const completeAppointment = useCallback(
-    (appointmentId) => updateAppointment("/api/doctor/complete-appointment", appointmentId, "Unable to complete appointment"),
-    [updateAppointment]
+  const runOperationalAppointmentAction = useCallback(
+    async ({ endpoint, payload }) => {
+      try {
+        const { data } = await axios.post(`${backendUrl}${endpoint}`, payload, { headers: { dToken } });
+        if (data.success) {
+          toast.success(data.message || "Appointment updated");
+          await Promise.all([getAppointments(), getDashData()]);
+        } else toast.error(data.message);
+      } catch (error) {
+        if (!isAuthSessionHandledError(error)) toast.error(error.response?.data?.message || error.message || "Unable to update appointment");
+      }
+    },
+    [backendUrl, dToken, getAppointments, getDashData]
   );
   const updateClinicalNotes = useCallback(
     async (appointmentId, clinicalNotes) => {
@@ -107,9 +125,11 @@ const DoctorContextProvider = ({ children }) => {
         appointments,
         getAppointments,
         cancelAppointment,
-        completeAppointment,
+        runOperationalAppointmentAction,
         updateClinicalNotes,
         dashData,
+        dashboardState,
+        dashboardError,
         getDashData,
         profileData,
         setProfileData,

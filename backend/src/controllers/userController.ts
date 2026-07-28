@@ -30,6 +30,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { sendSuccess } from "../utils/response.js";
 import { auditContextFromRequest } from "../utils/requestAudit.js";
 import { updateHealthProfileSchema } from "../validators/userValidators.js";
+import { bookFollowUpAppointment, ensureAppointmentReminder, listPatientReminders, markReminderRead, patientQueueStatus, reschedulePatientAppointment } from "../services/operationsService.js";
 
 const requireUserId = (userId?: string): string => {
   if (!userId) {
@@ -103,18 +104,18 @@ export const updateHealthProfile: RequestHandler = asyncHandler(async (req, res)
 });
 
 export const bookAppointment: RequestHandler = asyncHandler(async (req, res) => {
-  const payload = req.body as { docId: string; slotDate: string; slotTime: string };
-  const booking = await bookPatientAppointment(
-    requireUserId(req.authUserId),
-    payload,
-    req.authOrganizationId
-  );
+  const payload = req.body as { docId: string; slotDate: string; slotTime: string; followUpAppointmentId?: string };
+  const userId = requireUserId(req.authUserId);
+  const booking = payload.followUpAppointmentId
+    ? await bookFollowUpAppointment(userId, payload.followUpAppointmentId, payload.slotDate, payload.slotTime, req.authOrganizationId)
+    : await bookPatientAppointment(userId, payload, req.authOrganizationId);
   await writeAuditLog({
     eventType: "appointment.booked",
     ...auditContextFromRequest(req),
     target: { type: "appointment", id: booking.appointmentId },
-    metadata: { doctorId: payload.docId, slotDate: booking.slotDate, slotTime: booking.slotTime }
+    metadata: { doctorId: payload.docId, slotDate: booking.slotDate, slotTime: booking.slotTime, followUpAppointmentId: payload.followUpAppointmentId }
   });
+  await ensureAppointmentReminder(booking.appointmentId);
   sendSuccess(res, 201, "Appointment Booked", { appointment: booking }, { appointment: booking });
 });
 
@@ -140,6 +141,29 @@ export const listAppointment: RequestHandler = asyncHandler(async (req, res) => 
     req.authOrganizationId
   );
   sendSuccess(res, 200, "Appointments loaded", { appointments }, { appointments });
+});
+
+export const rescheduleAppointment: RequestHandler = asyncHandler(async (req, res) => {
+  const payload = req.body as { appointmentId: string; slotDate: string; slotTime: string };
+  const booking = await reschedulePatientAppointment(requireUserId(req.authUserId), payload.appointmentId, payload.slotDate, payload.slotTime, req.authOrganizationId);
+  await ensureAppointmentReminder(booking.appointmentId);
+  await writeAuditLog({ eventType: "appointment.rescheduled", ...auditContextFromRequest(req), target: { type: "appointment", id: payload.appointmentId }, metadata: { replacementAppointmentId: booking.appointmentId } });
+  sendSuccess(res, 201, "Appointment rescheduled", { appointment: booking }, { appointment: booking });
+});
+
+export const reminders: RequestHandler = asyncHandler(async (req, res) => {
+  const items = await listPatientReminders(requireUserId(req.authUserId), req.authOrganizationId);
+  sendSuccess(res, 200, "Reminders loaded", { reminders: items }, { reminders: items });
+});
+export const readReminder: RequestHandler = asyncHandler(async (req, res) => {
+  const reminderId = req.params.reminderId as string;
+  await markReminderRead(requireUserId(req.authUserId), reminderId, req.authOrganizationId);
+  await writeAuditLog({ eventType: "reminder.read", ...auditContextFromRequest(req), target: { type: "reminder", id: reminderId } });
+  sendSuccess(res, 200, "Reminder marked as read");
+});
+export const queueStatus: RequestHandler = asyncHandler(async (req, res) => {
+  const status = await patientQueueStatus(requireUserId(req.authUserId), req.params.appointmentId as string, req.authOrganizationId);
+  sendSuccess(res, 200, "Queue status loaded", { queue: status }, { queue: status });
 });
 
 export const paymentRazorpay: RequestHandler = asyncHandler(async (req, res) => {

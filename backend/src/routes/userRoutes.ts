@@ -16,6 +16,10 @@ import {
   paymentRazorpay,
   paymentStripe,
   patientMedicalRecords,
+  queueStatus,
+  readReminder,
+  reminders,
+  rescheduleAppointment,
   updateHealthProfile,
   updateProfile,
   verifyRazorpay,
@@ -33,7 +37,7 @@ import {
   updateHealthProfileSchema,
   updateProfileSchema,
   verifyRazorpaySchema,
-  verifyStripeSchema
+  verifyStripeSchema, rescheduleAppointmentSchema, reminderParamsSchema, appointmentParamsSchema
 } from "../validators/userValidators.js";
 import {
   familyMemberCreateSchema,
@@ -58,6 +62,10 @@ userRouter.get(
   authorizePermissions("users:read"),
   getHealthProfile
 );
+userRouter.post("/appointments/:appointmentId/reschedule", authUser, authorizePermissions("appointments:create", "appointments:cancel"), validateRequest({ params: appointmentParamsSchema, body: rescheduleAppointmentSchema }), rescheduleAppointment);
+userRouter.get("/appointments/:appointmentId/queue", authUser, authorizePermissions("appointments:read"), validateRequest({ params: appointmentParamsSchema }), queueStatus);
+userRouter.get("/reminders", authUser, authorizePermissions("appointments:read"), reminders);
+userRouter.patch("/reminders/:reminderId/read", authUser, authorizePermissions("appointments:read"), validateRequest({ params: reminderParamsSchema }), readReminder);
 userRouter.put(
   "/health-profile",
   authUser,

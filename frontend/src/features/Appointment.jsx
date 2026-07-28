@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useState } from 'react'
-import { useNavigate, useParams } from '../lib/routerCompat'
+import { useNavigate, useParams, useSearchParams } from '../lib/routerCompat'
 import { AppContext } from '../context/AppContext'
 import { assets } from '../assets/assets'
 import RelatedDoctors from '../components/RelatedDoctors'
@@ -7,10 +7,12 @@ import axios from 'axios'
 import { toast } from 'react-toastify'
 import { isAuthSessionHandledError } from '../api/authClient'
 import { loginHrefForReturnTo } from '../lib/authNavigation'
+import { imageSrc } from '../lib/imageSrc'
 
 const Appointment = () => {
 
     const { docId } = useParams()
+    const [searchParams] = useSearchParams()
     const { authStatus, doctors, doctorsLoading, doctorsError, currencySymbol, backendUrl, token, getDoctosData } = useContext(AppContext)
     const daysOfWeek = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 
@@ -22,6 +24,8 @@ const Appointment = () => {
     const [slotsError, setSlotsError] = useState('')
 
     const navigate = useNavigate()
+    const rescheduleAppointmentId = searchParams.get('reschedule')
+    const followUpAppointmentId = searchParams.get('followUp')
 
     const fetchDocInfo = async () => {
         const docInfo = doctors.find((doc) => doc._id === docId)
@@ -77,9 +81,13 @@ const Appointment = () => {
 
         try {
 
-            const { data } = await axios.post(backendUrl + '/api/user/book-appointment', { docId, slotDate, slotTime }, { headers: { token } })
+            const endpoint = rescheduleAppointmentId ? `/api/user/appointments/${rescheduleAppointmentId}/reschedule` : '/api/user/book-appointment'
+            const payload = rescheduleAppointmentId
+                ? { appointmentId: rescheduleAppointmentId, slotDate, slotTime }
+                : { docId, slotDate, slotTime, ...(followUpAppointmentId ? { followUpAppointmentId } : {}) }
+            const { data } = await axios.post(backendUrl + endpoint, payload, { headers: { token } })
             if (data.success) {
-                toast.success(data.message)
+                toast.success(rescheduleAppointmentId ? 'Appointment rescheduled' : data.message)
                 getDoctosData()
                 navigate('/my-appointments')
             } else {
@@ -87,7 +95,6 @@ const Appointment = () => {
             }
 
         } catch (error) {
-            console.log(error)
             if (!isAuthSessionHandledError(error)) {
                 toast.error(error.message)
             }
@@ -128,7 +135,7 @@ const Appointment = () => {
             {/* ---------- Doctor Details ----------- */}
             <div className='flex flex-col sm:flex-row gap-4'>
                 <div>
-                    <img className='bg-[#E7F4F5] w-full sm:max-w-72 rounded-lg' src={docInfo.image} alt={docInfo.name} />
+                    <img className='bg-[#E7F4F5] w-full sm:max-w-72 rounded-lg' src={imageSrc(docInfo.image, assets.profile_pic)} alt={docInfo.name} onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = assets.profile_pic }} />
                 </div>
 
                 <div className='mf-card flex-1 p-6 sm:p-8 bg-white mx-2 sm:mx-0 mt-[-80px] sm:mt-0'>
@@ -153,7 +160,7 @@ const Appointment = () => {
 
             {/* Booking slots */}
             <div className='mf-card sm:ml-72 sm:pl-4 mt-8 p-5 sm:p-6 font-medium text-slate-600'>
-                <p className='text-xl text-ink'>Choose a time</p>
+                <p className='text-xl text-ink'>{rescheduleAppointmentId ? 'Choose a new appointment time' : followUpAppointmentId ? 'Choose a follow-up time' : 'Choose a time'}</p>
                 <div className='flex gap-3 items-center w-full overflow-x-scroll mt-4'>
                     {docSlots.length && docSlots.map((item, index) => (
                         <div onClick={() => setSlotIndex(index)} key={index} className={`text-center py-5 min-w-16 rounded-md cursor-pointer ${slotIndex === index ? 'bg-primary text-white' : 'border border-line bg-white hover:border-teal'}`}>
@@ -172,7 +179,7 @@ const Appointment = () => {
                     {!slotsLoading && !slotsError && docSlots[slotIndex]?.slots.length === 0 && <p className='text-sm text-slate-500'>No available times on this day.</p>}
                 </div>
 
-                <button onClick={bookAppointment} disabled={!slotTime} className='mf-button my-6 disabled:cursor-not-allowed disabled:opacity-60'>Book appointment</button>
+                <button onClick={bookAppointment} disabled={!slotTime} className='mf-button my-6 disabled:cursor-not-allowed disabled:opacity-60'>{rescheduleAppointmentId ? 'Reschedule appointment' : followUpAppointmentId ? 'Book follow-up' : 'Book appointment'}</button>
             </div>
 
             {/* Listing Releated Doctors */}

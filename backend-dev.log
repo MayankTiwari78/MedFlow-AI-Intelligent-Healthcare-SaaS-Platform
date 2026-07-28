@@ -1,0 +1,324 @@
+
+> medflow-backend@1.0.0 dev
+> tsx watch src/server.ts
+
+[19:16:22.377] [41mFATAL[49m: [36mUncaught exception[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "process.uncaught_exception"
+    err: {
+      "type": "Error",
+      "message": "listen EADDRINUSE: address already in use :::4000",
+      "stack":
+          Error: listen EADDRINUSE: address already in use :::4000
+              at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+              at listenInCluster (node:net:1965:12)
+              at Server.listen (node:net:2067:7)
+              at Function.listen (C:\Users\HP\hospital managamenet\Prescripto-Hospital_Management_System\backend\node_modules\express\lib\application.js:635:24)
+              at start (C:\Users\HP\hospital managamenet\Prescripto-Hospital_Management_System\backend\src\server.ts:27:16)
+              at <anonymous> (C:\Users\HP\hospital managamenet\Prescripto-Hospital_Management_System\backend\src\server.ts:61:1)
+              at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+              at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+              at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+      "code": "EADDRINUSE",
+      "errno": -4091,
+      "syscall": "listen",
+      "address": "::",
+      "port": 4000
+    }
+[19:16:22.382] [32mINFO[39m: [36mShutting down server[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "server.shutdown"
+    [35msignal[39m: "uncaughtException"
+[19:16:25.015] [32mINFO[39m: [36mDatabase connected[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "mongodb.connected"
+[19:16:25.036] [32mINFO[39m: [36mDatabase disconnected[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "mongodb.disconnected"
+8:13:45 PM [tsx] change in ./src\models\User.ts Rerunning...
+8:13:47 PM [tsx] change in ./src\models\Doctor.ts Restarting...
+8:13:49 PM [tsx] change in ./src\models\Appointment.ts Restarting...
+[20:13:53.301] [32mINFO[39m: [36mServer started[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "server.started"
+    [35mport[39m: 4000
+[20:13:54.878] [32mINFO[39m: [36mDatabase connected[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "mongodb.connected"
+8:19:49 PM [tsx] change in ./src\constants\audit.ts Restarting...
+[20:20:05.906] [32mINFO[39m: [36mServer started[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "server.started"
+    [35mport[39m: 4000
+[20:20:29.591] [31mERROR[39m: [36mDatabase startup connection failed[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "mongodb.startup_failed"
+[20:20:29.594] [31mERROR[39m: [36mDatabase connection error[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "mongodb.error"
+    err: {
+      "type": "MongoNetworkError",
+      "message": "connect ETIMEDOUT 159.41.168.30:27017: connect ETIMEDOUT 159.41.168.30:27017",
+      "stack":
+          MongoNetworkError: connect ETIMEDOUT 159.41.168.30:27017
+              at TLSSocket.<anonymous> (C:\Users\HP\hospital managamenet\Prescripto-Hospital_Management_System\backend\node_modules\mongodb\src\cmap\connect.ts:395:16)
+              at Object.onceWrapper (node:events:639:26)
+              at TLSSocket.emit (node:events:524:28)
+              at emitErrorNT (node:internal/streams/destroy:169:8)
+              at emitErrorCloseNT (node:internal/streams/destroy:128:3)
+              at process.processTicksAndRejections (node:internal/process/task_queues:82:21)
+          caused by: Error: connect ETIMEDOUT 159.41.168.30:27017
+              at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
+      "errorLabelSet": {},
+      "beforeHandshake": false,
+      "connectionGeneration": 0
+    }
+8:21:45 PM [tsx] change in ./src\controllers\userController.ts Restarting...
+8:21:47 PM [tsx] change in ./src\controllers\doctorController.ts Restarting...
+8:21:49 PM [tsx] change in ./src\controllers\adminController.ts Restarting...
+[20:21:51.957] [32mINFO[39m: [36mServer started[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "server.started"
+    [35mport[39m: 4000
+[20:22:02.066] [31mERROR[39m: [36mDatabase startup connection failed[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "mongodb.startup_failed"
+[20:22:02.066] [31mERROR[39m: [36mDatabase connection error[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "mongodb.error"
+    err: {
+      "type": "MongoServerSelectionError",
+      "message": "Server selection timed out after 10000 ms",
+      "stack":
+          MongoServerSelectionError: Server selection timed out after 10000 ms
+              at Topology.selectServer (C:\Users\HP\hospital managamenet\Prescripto-Hospital_Management_System\backend\node_modules\mongodb\src\sdam\topology.ts:635:30)
+              at async Topology._connect (C:\Users\HP\hospital managamenet\Prescripto-Hospital_Management_System\backend\node_modules\mongodb\src\sdam\topology.ts:467:22)
+              at async Topology.connect (C:\Users\HP\hospital managamenet\Prescripto-Hospital_Management_System\backend\node_modules\mongodb\src\sdam\topology.ts:404:7)
+              at async topologyConnect (C:\Users\HP\hospital managamenet\Prescripto-Hospital_Management_System\backend\node_modules\mongodb\src\mongo_client.ts:695:9)
+              at async MongoClient._connect (C:\Users\HP\hospital managamenet\Prescripto-Hospital_Management_System\backend\node_modules\mongodb\src\mongo_client.ts:707:7)
+              at async MongoClient.connect (C:\Users\HP\hospital managamenet\Prescripto-Hospital_Management_System\backend\node_modules\mongodb\src\mongo_client.ts:619:7)
+              at async NativeConnection.createClient (C:\Users\HP\hospital managamenet\Prescripto-Hospital_Management_System\backend\node_modules\mongoose\lib\drivers\node-mongodb-native\connection.js:351:3)
+              at async NativeConnection.openUri (C:\Users\HP\hospital managamenet\Prescripto-Hospital_Management_System\backend\node_modules\mongoose\lib\connection.js:1098:5)
+              at async connectDB (C:\Users\HP\hospital managamenet\Prescripto-Hospital_Management_System\backend\src\config\database.ts:15:3)
+      "errorLabelSet": {},
+      "reason": {
+        "type": "ReplicaSetNoPrimary",
+        "servers": {
+          "ac-67ljouj-shard-00-02.htauy07.mongodb.net:27017": {
+            "address": "ac-67ljouj-shard-00-02.htauy07.mongodb.net:27017",
+            "type": "Unknown",
+            "hosts": [],
+            "passives": [],
+            "arbiters": [],
+            "tags": {},
+            "minWireVersion": 0,
+            "maxWireVersion": 0,
+            "roundTripTime": -1,
+            "minRoundTripTime": 0,
+            "lastUpdateTime": 9304268,
+            "lastWriteDate": 0,
+            "error": null,
+            "topologyVersion": null,
+            "setName": null,
+            "setVersion": null,
+            "electionId": null,
+            "logicalSessionTimeoutMinutes": null,
+            "maxMessageSizeBytes": null,
+            "maxWriteBatchSize": null,
+            "maxBsonObjectSize": null,
+            "primary": null,
+            "me": null,
+            "$clusterTime": null,
+            "iscryptd": false
+          },
+          "ac-67ljouj-shard-00-00.htauy07.mongodb.net:27017": {
+            "address": "ac-67ljouj-shard-00-00.htauy07.mongodb.net:27017",
+            "type": "Unknown",
+            "hosts": [],
+            "passives": [],
+            "arbiters": [],
+            "tags": {},
+            "minWireVersion": 0,
+            "maxWireVersion": 0,
+            "roundTripTime": -1,
+            "minRoundTripTime": 0,
+            "lastUpdateTime": 9304268,
+            "lastWriteDate": 0,
+            "error": null,
+            "topologyVersion": null,
+            "setName": null,
+            "setVersion": null,
+            "electionId": null,
+            "logicalSessionTimeoutMinutes": null,
+            "maxMessageSizeBytes": null,
+            "maxWriteBatchSize": null,
+            "maxBsonObjectSize": null,
+            "primary": null,
+            "me": null,
+            "$clusterTime": null,
+            "iscryptd": false
+          },
+          "ac-67ljouj-shard-00-01.htauy07.mongodb.net:27017": {
+            "address": "ac-67ljouj-shard-00-01.htauy07.mongodb.net:27017",
+            "type": "Unknown",
+            "hosts": [],
+            "passives": [],
+            "arbiters": [],
+            "tags": {},
+            "minWireVersion": 0,
+            "maxWireVersion": 0,
+            "roundTripTime": -1,
+            "minRoundTripTime": 0,
+            "lastUpdateTime": 9304268,
+            "lastWriteDate": 0,
+            "error": null,
+            "topologyVersion": null,
+            "setName": null,
+            "setVersion": null,
+            "electionId": null,
+            "logicalSessionTimeoutMinutes": null,
+            "maxMessageSizeBytes": null,
+            "maxWriteBatchSize": null,
+            "maxBsonObjectSize": null,
+            "primary": null,
+            "me": null,
+            "$clusterTime": null,
+            "iscryptd": false
+          }
+        },
+        "stale": false,
+        "compatible": true,
+        "heartbeatFrequencyMS": 10000,
+        "localThresholdMS": 15,
+        "setName": "atlas-f4t9e6-shard-0",
+        "maxElectionId": null,
+        "maxSetVersion": null,
+        "commonWireVersion": 0,
+        "logicalSessionTimeoutMinutes": null
+      }
+    }
+8:22:12 PM [tsx] change in ./src\controllers\adminController.ts Restarting...
+8:22:15 PM [tsx] change in ./src\routes\userRoutes.ts Restarting...
+8:22:17 PM [tsx] change in ./src\routes\doctorRoutes.ts Restarting...
+8:22:20 PM [tsx] change in ./src\routes\adminRoutes.ts Restarting...
+[20:22:24.511] [32mINFO[39m: [36mServer started[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "server.started"
+    [35mport[39m: 4000
+[20:22:25.219] [32mINFO[39m: [36mDatabase connected[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "mongodb.connected"
+8:22:44 PM [tsx] change in ./src\services\medicalRecordService.ts Restarting...
+8:22:47 PM [tsx] change in ./src\services\familyMemberService.ts Restarting...
+[20:22:50.802] [32mINFO[39m: [36mServer started[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "server.started"
+    [35mport[39m: 4000
+[20:22:51.285] [32mINFO[39m: [36mDatabase connected[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "mongodb.connected"
+8:23:08 PM [tsx] change in ./src\services\medicalRecordService.ts Restarting...
+8:23:10 PM [tsx] change in ./src\services\familyMemberService.ts Restarting...
+[20:23:13.515] [32mINFO[39m: [36mServer started[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "server.started"
+    [35mport[39m: 4000
+[20:23:14.999] [32mINFO[39m: [36mDatabase connected[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "mongodb.connected"
+8:28:00 PM [tsx] change in ./src\controllers\doctorController.ts Restarting...
+8:28:02 PM [tsx] change in ./src\controllers\userController.ts Restarting...
+[20:28:06.830] [41mFATAL[49m: [36mUncaught exception[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "process.uncaught_exception"
+    err: {
+      "type": "Error",
+      "message": "listen EADDRINUSE: address already in use :::4000",
+      "stack":
+          Error: listen EADDRINUSE: address already in use :::4000
+              at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+              at listenInCluster (node:net:1965:12)
+              at Server.listen (node:net:2067:7)
+              at Function.listen (C:\Users\HP\hospital managamenet\Prescripto-Hospital_Management_System\backend\node_modules\express\lib\application.js:635:24)
+              at start (C:\Users\HP\hospital managamenet\Prescripto-Hospital_Management_System\backend\src\server.ts:27:16)
+              at <anonymous> (C:\Users\HP\hospital managamenet\Prescripto-Hospital_Management_System\backend\src\server.ts:61:1)
+              at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+              at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+              at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+      "code": "EADDRINUSE",
+      "errno": -4091,
+      "syscall": "listen",
+      "address": "::",
+      "port": 4000
+    }
+[20:28:06.846] [32mINFO[39m: [36mShutting down server[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "server.shutdown"
+    [35msignal[39m: "uncaughtException"
+[20:28:17.459] [32mINFO[39m: [36mDatabase connected[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "mongodb.connected"
+[20:28:17.488] [32mINFO[39m: [36mDatabase disconnected[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "mongodb.disconnected"
+8:29:30 PM [tsx] change in ./src\controllers\doctorController.ts Rerunning...
+8:29:32 PM [tsx] change in ./src\controllers\userController.ts Restarting...
+[20:29:34.422] [41mFATAL[49m: [36mUncaught exception[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "process.uncaught_exception"
+    err: {
+      "type": "Error",
+      "message": "listen EADDRINUSE: address already in use :::4000",
+      "stack":
+          Error: listen EADDRINUSE: address already in use :::4000
+              at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+              at listenInCluster (node:net:1965:12)
+              at Server.listen (node:net:2067:7)
+              at Function.listen (C:\Users\HP\hospital managamenet\Prescripto-Hospital_Management_System\backend\node_modules\express\lib\application.js:635:24)
+              at start (C:\Users\HP\hospital managamenet\Prescripto-Hospital_Management_System\backend\src\server.ts:27:16)
+              at <anonymous> (C:\Users\HP\hospital managamenet\Prescripto-Hospital_Management_System\backend\src\server.ts:61:1)
+              at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+              at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+              at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+      "code": "EADDRINUSE",
+      "errno": -4091,
+      "syscall": "listen",
+      "address": "::",
+      "port": 4000
+    }
+[20:29:34.427] [32mINFO[39m: [36mShutting down server[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "server.shutdown"
+    [35msignal[39m: "uncaughtException"
+[20:29:39.097] [32mINFO[39m: [36mDatabase connected[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "mongodb.connected"
+[20:29:39.113] [32mINFO[39m: [36mDatabase disconnected[39m
+    [35mservice[39m: "medflow-backend"
+    [35menvironment[39m: "development"
+    [35mevent[39m: "mongodb.disconnected"

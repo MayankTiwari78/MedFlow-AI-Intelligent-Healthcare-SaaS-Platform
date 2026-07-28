@@ -3,17 +3,23 @@ import { Router } from "express";
 import { loginDoctor } from "../controllers/authController.js";
 import {
   appointmentCancel,
+  appointmentCheckIn,
   appointmentComplete,
+  appointmentNoShow,
   appointmentsDoctor,
   availableSlots,
+  callNext,
   changeAvailablity,
   createAppointmentMedicalRecord,
   doctorDashboard,
+  doctorQueue,
   doctorList,
   doctorPatientMedicalRecords,
   doctorProfile,
   finalizeAppointmentMedicalRecord,
   ownAvailability,
+  operationalComplete,
+  recommendFollowUp,
   updateClinicalNotes,
   updateAppointmentMedicalRecord,
   updateOwnAvailability,
@@ -31,6 +37,7 @@ import {
   updateClinicalNotesSchema,
   updateDoctorAvailabilitySchema,
   updateDoctorProfileSchema
+  ,queueQuerySchema, followUpSchema
 } from "../validators/doctorValidators.js";
 import {
   appointmentMedicalRecordParamsSchema,
@@ -55,6 +62,12 @@ doctorRouter.post(
   validateRequest({ body: doctorActionAppointmentSchema }),
   appointmentCancel
 );
+doctorRouter.post("/check-in", authDoctor, authorizePermissions("appointments:update"), validateRequest({ body: doctorActionAppointmentSchema }), appointmentCheckIn);
+doctorRouter.post("/no-show", authDoctor, authorizePermissions("appointments:update"), validateRequest({ body: doctorActionAppointmentSchema }), appointmentNoShow);
+doctorRouter.get("/queue", authDoctor, authorizePermissions("appointments:read"), validateRequest({ query: queueQuerySchema }), doctorQueue);
+doctorRouter.post("/queue/call-next", authDoctor, authorizePermissions("appointments:update"), validateRequest({ body: queueQuerySchema }), callNext);
+doctorRouter.post("/appointments/:appointmentId/complete-operational", authDoctor, authorizePermissions("appointments:update"), validateRequest({ params: clinicalNotesParamsSchema }), operationalComplete);
+doctorRouter.post("/appointments/:appointmentId/follow-up", authDoctor, authorizePermissions("appointments:update"), validateRequest({ params: clinicalNotesParamsSchema, body: followUpSchema }), recommendFollowUp);
 doctorRouter.get(
   "/appointments",
   authDoctor,

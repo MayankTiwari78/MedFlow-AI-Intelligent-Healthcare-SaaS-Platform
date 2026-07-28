@@ -3,7 +3,6 @@ import type { RequestHandler } from "express";
 import {
   cancelDoctorAppointment,
   changeDoctorAvailability,
-  completeDoctorAppointment,
   getDoctorDashboard,
   getOwnDoctorAvailability,
   getDoctorProfile,
@@ -29,6 +28,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { sendSuccess } from "../utils/response.js";
 import { auditContextFromRequest } from "../utils/requestAudit.js";
 import { updateDoctorAvailabilitySchema } from "../validators/doctorValidators.js";
+import { callNextQueuePatient, checkInAppointment, completeOperationalAppointment, createFollowUp, getDoctorQueue, markAppointmentNoShow } from "../services/operationsService.js";
 
 const requireDoctorId = (doctorId?: string): string => {
   if (!doctorId) {
@@ -86,11 +86,7 @@ export const appointmentCancel: RequestHandler = asyncHandler(async (req, res) =
 
 export const appointmentComplete: RequestHandler = asyncHandler(async (req, res) => {
   const { appointmentId } = req.body as { appointmentId: string };
-  await completeDoctorAppointment(
-    requireDoctorId(req.authDoctorId),
-    appointmentId,
-    req.authOrganizationId
-  );
+  await completeOperationalAppointment(requireDoctorId(req.authDoctorId), appointmentId, req.authOrganizationId);
   await writeAuditLog({
     eventType: "appointment.status_changed",
     ...auditContextFromRequest(req),
@@ -98,6 +94,48 @@ export const appointmentComplete: RequestHandler = asyncHandler(async (req, res)
     metadata: { status: "completed", source: "doctor" }
   });
   sendSuccess(res, 200, "Appointment Completed");
+});
+
+export const appointmentNoShow: RequestHandler = asyncHandler(async (req, res) => {
+  const appointmentId = (req.body as { appointmentId: string }).appointmentId;
+  await markAppointmentNoShow(requireDoctorId(req.authDoctorId), appointmentId, req.authOrganizationId);
+  await writeAuditLog({ eventType: "appointment.no_show", ...auditContextFromRequest(req), target: { type: "appointment", id: appointmentId }, metadata: { source: "doctor" } });
+  sendSuccess(res, 200, "Appointment marked as no-show");
+});
+
+export const appointmentCheckIn: RequestHandler = asyncHandler(async (req, res) => {
+  const appointmentId = (req.body as { appointmentId: string }).appointmentId;
+  const appointment = await checkInAppointment(requireDoctorId(req.authDoctorId), appointmentId, req.authOrganizationId);
+  await writeAuditLog({ eventType: "appointment.checked_in", ...auditContextFromRequest(req), target: { type: "appointment", id: appointmentId }, metadata: { token: appointment.queueToken } });
+  sendSuccess(res, 200, "Patient checked in", { appointment }, { appointment });
+});
+
+export const doctorQueue: RequestHandler = asyncHandler(async (req, res) => {
+  const slotDate = req.query.slotDate as string;
+  const queue = await getDoctorQueue(requireDoctorId(req.authDoctorId), slotDate, req.authOrganizationId);
+  sendSuccess(res, 200, "Queue loaded", { queue }, { queue });
+});
+
+export const callNext: RequestHandler = asyncHandler(async (req, res) => {
+  const slotDate = (req.body as { slotDate: string }).slotDate;
+  const appointment = await callNextQueuePatient(requireDoctorId(req.authDoctorId), slotDate, req.authOrganizationId);
+  await writeAuditLog({ eventType: "appointment.queue_called", ...auditContextFromRequest(req), target: { type: "appointment", id: String(appointment._id) }, metadata: { token: appointment.queueToken } });
+  sendSuccess(res, 200, "Next patient called", { appointment }, { appointment });
+});
+
+export const operationalComplete: RequestHandler = asyncHandler(async (req, res) => {
+  const appointmentId = req.params.appointmentId as string;
+  await completeOperationalAppointment(requireDoctorId(req.authDoctorId), appointmentId, req.authOrganizationId);
+  await writeAuditLog({ eventType: "appointment.status_changed", ...auditContextFromRequest(req), target: { type: "appointment", id: appointmentId }, metadata: { status: "completed", source: "operations" } });
+  sendSuccess(res, 200, "Consultation completed");
+});
+
+export const recommendFollowUp: RequestHandler = asyncHandler(async (req, res) => {
+  const appointmentId = req.params.appointmentId as string;
+  const payload = req.body as { recommendedDate: string; reason: string };
+  const followUp = await createFollowUp(requireDoctorId(req.authDoctorId), appointmentId, payload.recommendedDate, payload.reason, req.authOrganizationId);
+  await writeAuditLog({ eventType: "appointment.follow_up.recommended", ...auditContextFromRequest(req), target: { type: "appointment", id: appointmentId }, metadata: { recommendedDate: followUp.recommendedDate } });
+  sendSuccess(res, 200, "Follow-up recommendation saved", { followUp }, { followUp });
 });
 
 export const doctorList: RequestHandler = asyncHandler(async (_req, res) => {

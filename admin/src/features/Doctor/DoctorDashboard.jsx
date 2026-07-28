@@ -4,10 +4,11 @@ import { useEffect } from 'react'
 import { DoctorContext } from '../../context/DoctorContext'
 import { assets } from '../../assets/assets'
 import { AppContext } from '../../context/AppContext'
+import DoctorAppointmentLifecycleControls from './AppointmentLifecycleControls'
 
 const DoctorDashboard = () => {
 
-  const { dToken, dashData, getDashData, cancelAppointment, completeAppointment } = useContext(DoctorContext)
+  const { dToken, dashData, dashboardState, dashboardError, getDashData, cancelAppointment, runOperationalAppointmentAction } = useContext(DoctorContext)
   const { slotDateFormat, currency } = useContext(AppContext)
 
 
@@ -19,7 +20,10 @@ const DoctorDashboard = () => {
 
   }, [dToken])
 
-  return dashData && (
+  if (dashboardState === 'loading' || (dToken && !dashData && dashboardState === 'idle')) return <main className='portal-page'><div className='portal-card h-72 animate-pulse bg-mist' aria-label='Loading dashboard' /></main>
+  if (dashboardState === 'error') return <main className='portal-page'><section className='portal-card p-8 text-center'><h1 className='portal-title'>Dashboard unavailable</h1><p className='mt-2 text-slate-600'>{dashboardError}</p><button type='button' className='portal-button mt-5' onClick={getDashData}>Retry</button></section></main>
+  if (!dashData) return <main className='portal-page'><section className='portal-card p-8 text-center'><h1 className='portal-title'>No dashboard data yet</h1><p className='mt-2 text-slate-600'>Sign in again or retry when your account is ready.</p><button type='button' className='portal-button mt-5' onClick={getDashData}>Retry</button></section></main>
+  return (
     <main className='portal-page'>
       <div><p className='portal-eyebrow'>Clinical workspace</p><h1 className='portal-title'>Doctor dashboard</h1><p className='mt-2 text-slate-600'>Your upcoming care activity, patient load, and completed work at a glance.</p></div>
 
@@ -60,15 +64,7 @@ const DoctorDashboard = () => {
                 <p className='text-ink font-semibold'>{item.userData.name}</p>
                 <p className='text-slate-500'>Booking on {slotDateFormat(item.slotDate)}</p>
               </div>
-              {item.cancelled
-                ? <p className='portal-status bg-red-50 text-red-700'>Cancelled</p>
-                : item.isCompleted
-                  ? <p className='portal-status bg-emerald-50 text-emerald-700'>Completed</p>
-                  : <div className='flex'>
-                    <img onClick={() => cancelAppointment(item._id)} className='w-10 cursor-pointer' src={assets.cancel_icon} alt="" />
-                    <img onClick={() => completeAppointment(item._id)} className='w-10 cursor-pointer' src={assets.tick_icon} alt="" />
-                  </div>
-              }
+              <DoctorAppointmentLifecycleControls appointment={item} onTransition={runOperationalAppointmentAction} onCancel={cancelAppointment} />
             </div>
           ))}
         </div>
